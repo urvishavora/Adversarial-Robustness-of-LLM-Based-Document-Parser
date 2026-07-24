@@ -1,0 +1,817 @@
+{
+  "schema_version": "1.0",
+  "description": "Ground-truth resume data. Text is preserved as displayed, including apparent typos and unusual date ordering, to support parser comparison.",
+  "resume_count": 10,
+  "resumes": [
+    {
+      "file_name": "jonathan_patterson_marketing_manager.pdf",
+      "name": {
+        "full_name": "Jonathan Patterson",
+        "first_name": "Jonathan",
+        "last_name": "Patterson"
+      },
+      "job_title": "Marketing Manager",
+      "contact": {
+        "phone": "432-678-4563",
+        "email": "Jonathanpatterson@gmail.com",
+        "address": "100 Bain Ave, Toronto",
+        "linkedin": null
+      },
+      "summary": "I am a marketing manager, with more than 5 years of experience in the creative industry. I have received various awards, national and international. I have gained a lot of experience in my work as a marketing manager.",
+      "education": [
+        {
+          "institution": "Borcelle University",
+          "degree": "Bachelor International Management",
+          "start_date": "2020",
+          "end_date": "2023",
+          "date": "2020 - 2023"
+        },
+        {
+          "institution": "Rimberio University",
+          "degree": "Bachelor International Management",
+          "start_date": "2016",
+          "end_date": "2020",
+          "date": "2016 - 2020"
+        }
+      ],
+      "experience": [
+        {
+          "job_title": "Marketing Manager",
+          "company": "Ginyard International Co.",
+          "start_date": "2020",
+          "end_date": "2023",
+          "date": "2020 - 2023",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+        },
+        {
+          "job_title": "Marketing Manager",
+          "company": "Arowwai Industries",
+          "start_date": "2019",
+          "end_date": "2020",
+          "date": "2019 - 2020",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+        },
+        {
+          "job_title": "Marketing Manager",
+          "company": "Salford & Co.",
+          "start_date": "2017",
+          "end_date": "2019",
+          "date": "2017 - 2019",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
+        }
+      ],
+      "skills": [
+        "Management Skills",
+        "Creativity",
+        "Digital Marketing",
+        "Negotiation",
+        "Critical Thinking",
+        "Leadership"
+      ],
+      "languages": [
+        "English",
+        "French"
+      ],
+      "references": [
+        {
+          "name": "Harumi Kobayashi",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        },
+        {
+          "name": "Bailey Dupont",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        }
+      ],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "sharya_singh_web_designer.pdf",
+      "name": {
+        "full_name": "Sharya Singh",
+        "first_name": "Sharya",
+        "last_name": "Singh"
+      },
+      "job_title": "Web Designer",
+      "contact": {
+        "phone": "567-897-5643",
+        "email": "sharyasingh@gmail.com",
+        "address": "54-1489 Heritage Way, Oakville, Toronto",
+        "linkedin": null
+      },
+      "summary": "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.",
+      "education": [
+        {
+          "institution": "Wardiere University",
+          "degree": "Master of IT Management",
+          "date": "2020 - 2023",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        },
+        {
+          "institution": "Borcelle University",
+          "degree": "Bachelor of Art and Design",
+          "date": "2016 - 2020",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        },
+        {
+          "institution": "Wardiere High School",
+          "degree": "Major Of Art and Design",
+          "date": "2012 - 2016",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        }
+      ],
+      "experience": [
+        {
+          "job_title": "Web Designer",
+          "company": "Wardiere Company",
+          "date": "2020 - 2023",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        },
+        {
+          "job_title": "Web Designer",
+          "company": "Borcelle Studio",
+          "date": "2016 - 2020",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        }
+      ],
+      "skills": [
+        "Web Design Tools",
+        "Front-End",
+        "Web Accessibility",
+        "Version Control",
+        "Color Theory",
+        "SEO Fundamentals",
+        "UI/UX Design",
+        "Typography"
+      ],
+      "languages": [],
+      "references": [
+        {
+          "name": "Niranjan Devi",
+          "position": "CEO of Wardiere Company",
+          "phone": "436-908-6543",
+          "email": null
+        },
+        {
+          "name": "Aarya Agarwal",
+          "position": "HRD of Wardiere Company",
+          "phone": "543-987-6578",
+          "email": null
+        }
+      ],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "nelly_hassan_graphic_designer.pdf",
+      "name": {
+        "full_name": "Nelly Hassan",
+        "first_name": "Nelly",
+        "last_name": "Hassan"
+      },
+      "job_title": "Graphic Designer",
+      "contact": {
+        "phone": "564-987-1234",
+        "email": "nellyhassan@gmail.com",
+        "address": "65-33 Maidstone Ave E, Essex, Toronto",
+        "linkedin": null
+      },
+      "summary": "A creative and detail-oriented Graphic Designer with over 5 years of experience in developing engaging visual content for diverse clients. Proficient in Graphic Suite. Proven ability to manage projects from concept to completion, ensuring brand consistency and delivering high-quality designs that meet client objectives and deadlines. Seeking to leverage my skills to create impactful designs for a forward-thinking company.",
+      "education": [
+        {
+          "institution": "University of the University",
+          "degree": "Bachelor of Arts in Graphic Design",
+          "date": "2019 - 2015",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque. Sed leo nisl, semper ac hendrerit a, sollicitudin in arcu."
+        },
+        {
+          "institution": "University of Engineering and Technology",
+          "degree": "Diploma in Advertising Management",
+          "date": "2023 - 2020",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque. Sed leo nisl, semper ac hendrerit a, sollicitudin in arcu."
+        }
+      ],
+      "experience": [
+        {
+          "job_title": "Senior Graphic Designer",
+          "company": "Creativa Agency",
+          "date": "January 2022 - Present",
+          "responsibilities": [
+            "Led the creative design process for major clients, resulting in a 25% increase in client satisfaction scores.",
+            "Designed and produced a wide range of marketing materials, including digital ads, social media graphics, brochures, and corporate branding packages.",
+            "Collaborated with marketing and content teams to ensure all visuals aligned with campaign goals and brand identity.",
+            "Mentored junior designers, providing feedback and guidance on projects."
+          ]
+        },
+        {
+          "job_title": "Content creator",
+          "company": "Digital Arts Studio",
+          "date": "March 2019 - December 2021",
+          "responsibilities": [
+            "Developed brand identities, logos, and style guides for over 30 small and medium-sized businesses.",
+            "Managed multiple projects simultaneously, from initial brief to final delivery, consistently meeting deadlines.",
+            "Created compelling visual assets for websites and mobile applications, enhancing user experience.",
+            "Improved workflow efficiency by implementing new design software and project management tools."
+          ]
+        }
+      ],
+      "skills": {
+        "Software": [
+          "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan."
+        ],
+        "Design": [
+          "Branding & Identity",
+          "Logo Design",
+          "Print Design",
+          "Digital Design",
+          "UI/UX Principles",
+          "Typography",
+          "Layout Design"
+        ],
+        "Soft Skills": [
+          "Project Management",
+          "Client Communication",
+          "Team Collaboration",
+          "Creative Thinking",
+          "Time Management"
+        ]
+      },
+      "languages": [],
+      "references": [],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "henrietta_mitchell_business_management_analysis.pdf",
+      "name": {
+        "full_name": "Henrietta Mitchell",
+        "first_name": "Henrietta",
+        "last_name": "Mitchell"
+      },
+      "job_title": "Business Management & Analysis",
+      "contact": {
+        "phone": "+543-908-6512",
+        "email": "henriettamitchell@gmail.com",
+        "address": "765-300 Borough Dr, Scarborough ON M1P 4P5",
+        "linkedin": "https://www.linkedin.com/in/henrietta-mitchell?"
+      },
+      "summary": "Motivated and results-driven Business School graduate seeking a challenging position within a large organisation as a Business Analyst or Project Manager. Offering a strong foundation in business strategy, data analysis, and project management, with a proven ability to drive efficiency, deliver successful outcomes and collaborate within cross-functional teams.",
+      "experience": [
+        {
+          "job_title": "Project Management Assistant",
+          "company": "Hanover and Tyke",
+          "date": "Oct 2023 - Present",
+          "description": "Assisted project managers in planning and executing various projects, ensuring adherence to project timelines and deliverables. Monitored project budgets, tracked expenses, and prepared financial reports to ensure cost-effectiveness and adherence to financial guidelines."
+        },
+        {
+          "job_title": "Barista",
+          "company": "Giggling Platypus Co.",
+          "date": "Jan 2022 - Aug 2023",
+          "description": "Prepared and served a variety of beverages with precision and creativity, consistently meeting or exceeding quality standards, and receiving compliments for latte art and presentation."
+        },
+        {
+          "job_title": "Business Analyst Intern",
+          "company": "Arowwai Industries",
+          "date": "July 2020 - Jan 2022",
+          "description": "Developed and implemented a streamlined process for gathering business requirements, reducing project delivery time by 15%. Developed and implemented a standardised reporting framework, resulting in improved visibility of key performance metrics and enabling data-driven decision-making at all levels of the organisation."
+        }
+      ],
+      "education": [
+        {
+          "institution": "Ginyard International Co.",
+          "degree": "Bachelor of Business Administration",
+          "details": "Majors: Analytics and Project Management; President, Business Club"
+        },
+        {
+          "institution": "Ginyard International Co.",
+          "degree": "Graduate Project Management Certification"
+        },
+        {
+          "institution": "Paucek and Lage",
+          "degree": "Impact Evaluation Methods 3-Day Short Course"
+        }
+      ],
+      "skills": [
+        "Process improvement",
+        "Data-driven strategic planning",
+        "Cost-benefit analysis",
+        "Report writing and presenting",
+        "Critical thinking skills",
+        "Excellent communication skills",
+        "Strong interpersonal skills",
+        "Proactive and self-motivated",
+        "Exceptional organisational skills"
+      ],
+      "languages": [],
+      "references": [],
+      "certifications": [
+        "Graduate Project Management Certification",
+        "Impact Evaluation Methods 3-Day Short Course"
+      ],
+      "awards": [],
+      "activities": [
+        {
+          "activity": "President, Business Club",
+          "organization": "Ginyard International Co."
+        },
+        {
+          "activity": "Community Volunteer",
+          "organization": "Liceria & Co."
+        }
+      ]
+    },
+    {
+      "file_name": "daniel_gallego_ux_designer.pdf",
+      "name": {
+        "full_name": "Daniel Gallego",
+        "first_name": "Daniel",
+        "last_name": "Gallego"
+      },
+      "job_title": "UX Designer",
+      "contact": {
+        "phone": null,
+        "email": "danielgallego@gmail.com",
+        "address": "1560 Sherban street, Toronti",
+        "linkedin": null
+      },
+      "summary": "UX Designer with a focus on delivering impactful results, eager to tackle dynamic challenges and apply creativity to craft intuitive user experiences. Demonstrated proficiency in project management, user-centric problem-solving, and seamless collaboration across teams. Skilled in leveraging state-of-the-art tools and methodologies to streamline processes and elevate user satisfaction.",
+      "skills": [
+        "Prototyping Tools",
+        "User Research",
+        "Information Architecture",
+        "Interaction Design",
+        "Visual Design",
+        "Usability Heuristics",
+        "Accessibility",
+        "Responsive Design",
+        "User Testing Tools"
+      ],
+      "experience": [
+        {
+          "job_title": "Instant Chartz App",
+          "company": "Morcelle Program",
+          "date": "Jan 2023 - Present",
+          "responsibilities": [
+            "Led development of an advanced automation system, achieving a 15% increase in operational efficiency.",
+            "Streamlined manufacturing processes, reducing production costs by 10%.",
+            "Implemented preventive maintenance strategies, resulting in a 20% decrease in equipment downtime."
+          ]
+        },
+        {
+          "job_title": "System UX Engineer",
+          "company": "XarrowAI Industries",
+          "date": "Feb 2021 - Dec 2022",
+          "responsibilities": [
+            "Designed and optimised a robotic control system, realizing a 12% performance improvement.",
+            "Coordinated testing and validation, ensuring compliance with industry standards.",
+            "Provided technical expertise, contributing to a 15% reduction in system failures."
+          ]
+        }
+      ],
+      "education": [
+        {
+          "institution": "University of Engineering UX Cohort",
+          "degree": "UX Industrial Basics and General Application",
+          "date": "Aug 2016 - Oct 2019",
+          "details": [
+            "Major in Automotive Technology.",
+            "Thesis on \"Technological Advancements within the current Mechatronics Industry\"."
+          ]
+        },
+        {
+          "institution": "Engineering University",
+          "degree": "Bachelor of Design in Process Engineering",
+          "date": "May 2014 - May 2016",
+          "details": [
+            "Relevant coursework in Structural Design and Project Management."
+          ]
+        }
+      ],
+      "languages": [
+        "English",
+        "French",
+        "Mandarin"
+      ],
+      "references": [],
+      "certifications": [
+        "Professional Design Engineer (PDE) License",
+        "Project Management Tech (PMT)"
+      ],
+      "awards": [
+        "Most Innovative Employer of the Year (2021)",
+        "Overall Best Employee Division Two (2024)"
+      ],
+      "activities": [
+        "Onboarding Project Lead (2023)"
+      ]
+    },
+    {
+      "file_name": "donna_stroupe_sales_representative.pdf",
+      "name": {
+        "full_name": "Donna Stroupe",
+        "first_name": "Donna",
+        "last_name": "Stroupe"
+      },
+      "job_title": "Sales Representative",
+      "contact": {
+        "phone": "321-465-7590",
+        "email": "donnastroupe@gamil.com",
+        "address": "32-100 Lewes Blvd, Whitehorse, Toronto",
+        "linkedin": null
+      },
+      "summary": "I am a Sales Representative is a professional who initializes and manages relationships with customers. They serve as their point of contact and lead from initial outreach through the making of the final purchase by them or someone in their household.",
+      "experience": [
+        {
+          "job_title": "Sales Representative",
+          "company": "Timmerman Industries",
+          "date": "2020 - 2023",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque. Sed leo nisl, semper ac hendrerit a, sollicitudin in arcu."
+        },
+        {
+          "job_title": "FMCG Sales Agent",
+          "company": "Timmerman Industries",
+          "date": "2019 - 2020",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque. Sed leo nisl, semper ac hendrerit a, sollicitudin in arcu."
+        },
+        {
+          "job_title": "Sales Agent",
+          "company": "Timmerman Industries",
+          "date": "2017 - 2019",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque. Sed leo nisl, semper ac hendrerit a, sollicitudin in arcu."
+        },
+        {
+          "job_title": "Sales Agent",
+          "company": "Timmerman Industries",
+          "date": "2016 - 2017",
+          "description": "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Nunc sit amet sem nec risus egestas accumsan. In enim nunc, tincidunt ut quam eget, luctus sollicitudin neque."
+        }
+      ],
+      "education": [
+        {
+          "institution": "Borcelle University",
+          "degree": "Bachelor of Business Management",
+          "date": "2020 - 2023"
+        },
+        {
+          "institution": "Wardiere University",
+          "degree": "Bachelor of Business Management",
+          "date": "2016 - 2020"
+        },
+        {
+          "institution": "Borcelle University",
+          "degree": "Bachelor of Business Management",
+          "date": "2012 - 2016"
+        }
+      ],
+      "skills": [
+        "Client Acquisition",
+        "B2B Sales",
+        "Negotiation",
+        "Relationship Management",
+        "Market Analysis",
+        "Sales Strategies",
+        "Negotiation Skills",
+        "Problem-Solving",
+        "Time Management",
+        "Presentation Skills",
+        "Networking",
+        "Market Research"
+      ],
+      "languages": [
+        "English",
+        "Arabic (basic)",
+        "German (basic)"
+      ],
+      "references": [
+        {
+          "name": "Harumi Kobayashi",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        },
+        {
+          "name": "Bailey Dupont",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        }
+      ],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "lorna_alvarado_marketing_manager.pdf",
+      "name": {
+        "full_name": "Lorna Alvarado",
+        "first_name": "Lorna",
+        "last_name": "Alvarado"
+      },
+      "job_title": "Marketing Manager",
+      "contact": {
+        "phone": "+433-876-8760",
+        "email": "lornaalvarado@gmail.com",
+        "address": "453-8 The Donway E, North York ON M3C 3R7",
+        "linkedin": "https://www.linkedin.com/in/lorna-alvarado?"
+      },
+      "summary": "Data-driven Marketing Manager with 6+ years of experience spearheading multi-channel marketing strategies that drive customer acquisition, brand awareness, and revenue growth. Proven track record of scaling digital campaigns across SEO, paid media, and email marketing, resulting in a 35% average increase in qualified leads. Skilled at translating analytics into actionable insights, leading cross-functional creative teams, and optimizing marketing budgets to maximize ROI.",
+      "experience": [
+        {
+          "job_title": "Marketing Manager",
+          "company": "Wardiere Inc.",
+          "location": "123 Anywhere St., Any City",
+          "date": "2030 - Present",
+          "responsibilities": [
+            "Create and manage the marketing budget, ensuring efficient allocation of resources and optimizing ROI.",
+            "Oversee market research to identify emerging trends, customer needs, and competitor strategies.",
+            "Develop and execute comprehensive marketing strategies and campaigns that align with the company's goals and objectives.",
+            "Monitor brand consistency across marketing channels and materials."
+          ]
+        },
+        {
+          "job_title": "Marketing Manager",
+          "company": "Studio Showde",
+          "location": "123 Anywhere St., Any City",
+          "date": "2027 - 2030",
+          "responsibilities": [
+            "Create and manage the marketing budget, ensuring efficient allocation of resources and optimizing ROI.",
+            "Oversee market research to identify emerging trends, customer needs, and competitor strategies.",
+            "Lead, mentor, and manage a high-performing marketing team, fostering a collaborative and results-driven work environment.",
+            "Monitor brand consistency across marketing channels and materials."
+          ]
+        }
+      ],
+      "education": [
+        {
+          "institution": "Wardiere University",
+          "degree": "Master of Strategic Marketing",
+          "date": "2029 - 2030"
+        },
+        {
+          "institution": "Wardiere University",
+          "degree": "Bachelor of Strategic Marketing",
+          "date": "2025 - 2029",
+          "gpa": "3.8 / 4.0"
+        }
+      ],
+      "skills": [
+        "Project Management",
+        "Public Relations",
+        "Teamwork",
+        "Time Management",
+        "Leadership",
+        "Effective Communication",
+        "Critical Thinking"
+      ],
+      "languages": [
+        "English",
+        "Arabic (basic)",
+        "German (basic)"
+      ],
+      "references": [
+        {
+          "name": "Harper Russo",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        }
+      ],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "juliana_silva_fashion_designer.pdf",
+      "name": {
+        "full_name": "Juliana Silva",
+        "first_name": "Juliana",
+        "last_name": "Silva"
+      },
+      "job_title": "Fashion Designer",
+      "contact": {
+        "phone": "432-987-4532",
+        "email": "julianasilva@gmail.com",
+        "address": "43-589 Beechwood Dr, Waterloo, ON N2T 2K9",
+        "linkedin": null
+      },
+      "summary": "An innovative fashion designer who has more than nine years of experience in the industry. Proficient in various design software and use them on various fashion projects. Has been involved in various projects and collaboration with many clients and big companies to deliver seasonal products and projects.",
+      "experience": [
+        {
+          "job_title": "Fashion Designer Intern",
+          "company": "Borcelle",
+          "location": "123 Anywhere St., Any City",
+          "date": "2011 - 2012",
+          "responsibilities": [
+            "Assist in the various merchandise and assortment development for the Summer Fashion. The new addition improves the fashion category and depth.",
+            "Created more than ten fresh designs for the content of the Borcelle fashion sketchbook released in fall 2012."
+          ]
+        },
+        {
+          "job_title": "Fashion Designer",
+          "company": "Borcelle",
+          "location": "123 Anywhere St., Any City",
+          "date": "2012 - 2022",
+          "responsibilities": [
+            "Developed more than 350 seasonal fashion style guides to promote Fauget's new collection of women's swimsuits.",
+            "Led the negotiation with the new vendors for the new material used in the 2013 Autumn Fashion festival, which saved more than 20% of the annual expense covering the material distribution, price, specification, and delivery deadlines."
+          ]
+        }
+      ],
+      "education": [
+        {
+          "institution": "Chidi Eze Fashion University",
+          "degree": "Bachelor of Arts in Fashion Design",
+          "date": "2005 - 2009",
+          "gpa": "3:90"
+        }
+      ],
+      "skills": [
+        "Apparel design",
+        "Sketching",
+        "Hand drawing",
+        "Digital drawing",
+        "Super eye for detail"
+      ],
+      "languages": [],
+      "references": [],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "hannah_morales_sales_representative.pdf",
+      "name": {
+        "full_name": "Hannah Morales",
+        "first_name": "Hannah",
+        "last_name": "Morales"
+      },
+      "job_title": "Sales Representative",
+      "contact": {
+        "phone": "423-678-5432",
+        "email": "hannahmorales@gmail.com",
+        "address": "34 Cabernet Circle, Toronto",
+        "linkedin": null
+      },
+      "summary": "I am a Sales Representative is a professional who initializes and manages relationships with customers. They serve as their point of contact and lead from initial outreach through the making of the final purchase by them or someone in their household.",
+      "experience": [
+        {
+          "job_title": "Senior Sales Representative",
+          "company": "Timmerman Industries",
+          "date": "January 2021 to Present",
+          "responsibilities": [
+            "Developed and executed sales strategies, resulting in a 25% increase in annual revenue.",
+            "Managed a portfolio of 50+ clients, achieving a 95% customer retention rate.",
+            "Conducted market research to identify new business opportunities and target prospects."
+          ]
+        },
+        {
+          "job_title": "FMCG Sales Agent",
+          "company": "Timmerman Industries",
+          "date": "June 2018 to December 2020",
+          "responsibilities": [
+            "Prospected and qualified leads through cold calling, email campaigns, and networking events.",
+            "Increased sales by 20% by implementing effective upselling and cross-selling strategies.",
+            "Maintained up-to-date knowledge of product features and benefits to provide accurate information to clients."
+          ]
+        },
+        {
+          "job_title": "Sales Agent",
+          "company": "Timmerman Industries",
+          "date": "June 2017 to December 2018",
+          "responsibilities": [
+            "Visited corporate client offices to offer latest products.",
+            "Built relationships with clients to maintain sales goals and create new opportunities."
+          ]
+        }
+      ],
+      "education": [
+        {
+          "institution": "Borcelle University",
+          "degree": "Bachelor of Business Management",
+          "date": "2020 - 2023"
+        },
+        {
+          "institution": "Wardiere University",
+          "degree": "Bachelor of Business Management",
+          "date": "2016 - 2020"
+        }
+      ],
+      "skills": [
+        "Client Acquisition",
+        "B2B Sales",
+        "Negotiation",
+        "Relationship Management",
+        "Market Analysis",
+        "Sales Strategies",
+        "Negotiation Skills",
+        "Problem-Solving",
+        "Time Management",
+        "Presentation Skills",
+        "Team Collaboration"
+      ],
+      "languages": [
+        "English",
+        "Germany (basic)"
+      ],
+      "references": [
+        {
+          "name": "Bailey Dupont",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        },
+        {
+          "name": "Harumi Kobayashi",
+          "organization": "Wardiere Inc.",
+          "position": "CEO",
+          "phone": "123-456-7890",
+          "email": "hello@reallygreatsite.com"
+        }
+      ],
+      "certifications": [],
+      "awards": [],
+      "activities": []
+    },
+    {
+      "file_name": "sebastian_bennett_real_estate_agent.pdf",
+      "name": {
+        "full_name": "Sebastian Bennett",
+        "first_name": "Sebastian",
+        "last_name": "Bennett"
+      },
+      "job_title": "Real Estate Agent",
+      "contact": {
+        "phone": "654-432-8765",
+        "email": "sebastianbennett@gmail.com",
+        "address": "43-8491 Ryan Rd, Richmond BC V7A 2E8",
+        "linkedin": "https://www.linkedin.com/in/sebastian-bennett?"
+      },
+      "summary": "I am an experienced Real Estate Agent with a passion for helping clients find their dream homes. I have extensive experience in the industry, including more than 5 years working as a real estate agent. I am knowledgeable about the latest market trends and understand the nuances of the real estate market. I pride myself on my ability to negotiate the best deals for my clients and to navigate complex real estate agreements. I am highly organized, detail-oriented, and have strong communication skills.",
+      "experience": [
+        {
+          "job_title": "Real Estate Agent",
+          "company": "Really Great Company",
+          "date": "June 2015 - Present",
+          "responsibilities": [
+            "Negotiate contracts and complex real estate transactions.",
+            "Provide excellent customer service to clients.",
+            "Update and maintain client files.",
+            "Research and monitor the local real estate market.",
+            "Develop marketing campaigns for properties.",
+            "Utilize social media platforms to market properties.",
+            "Participate in open houses and home tours."
+          ]
+        },
+        {
+          "job_title": "Real Estate Agent",
+          "company": "Really Great Company",
+          "date": "June 2014 - 2015",
+          "responsibilities": [
+            "Prepared contracts and documents for transactions.",
+            "Conducted market research on local real estate trends.",
+            "Compiled property information and photos.",
+            "Managed client database and contact information.",
+            "Scheduled property tours and open houses."
+          ]
+        }
+      ],
+      "education": [
+        {
+          "institution": "University",
+          "degree": "B.A. in Business Administration",
+          "date": "2010 - 2014"
+        }
+      ],
+      "skills": [
+        "Knowledge of the local real estate market",
+        "Communication skills",
+        "Negotiation skills",
+        "Problem-solving skills",
+        "Organization and time management skills"
+      ],
+      "languages": [],
+      "references": [],
+      "certifications": [
+        "Licensed Real Estate Agent",
+        "Certified Real Estate Negotiator"
+      ],
+      "awards": [
+        "Top Sales Agent Award 2016"
+      ],
+      "activities": []
+    }
+  ]
+}

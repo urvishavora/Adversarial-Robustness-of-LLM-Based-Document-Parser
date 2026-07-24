@@ -1,0 +1,64 @@
+"""Central configuration for the document parser.
+
+Every setting is overridable via an environment variable so the same code can
+run against a local Ollama install (the default, free/offline path) or a
+hosted API, without touching any parser module.
+"""
+
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+
+def _bool_env(name: str, default: bool) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
+# --- LLM backend (Ollama by default) ---------------------------------------
+OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434/api/generate")
+OLLAMA_CHAT_URL = os.getenv("OLLAMA_CHAT_URL", "http://localhost:11434/api/chat")
+OLLAMA_TAGS_URL = os.getenv("OLLAMA_TAGS_URL", "http://localhost:11434/api/tags")
+
+# Text extraction model. llama3.1 is the most accurate option this project has
+# been tuned against; llama3.2:3b is a much faster/lighter alternative.
+MODEL_NAME = os.getenv("MODEL_NAME", "llama3.1")
+
+# Vision model used only for handwritten form content. Requires a multimodal
+# Ollama model, e.g. `ollama pull llama3.2-vision`.
+VISION_MODEL_NAME = os.getenv("VISION_MODEL_NAME", "llama3.2-vision")
+ENABLE_HANDWRITING = _bool_env("ENABLE_HANDWRITING", True)
+HANDWRITING_MIN_CONFIDENCE = float(os.getenv("HANDWRITING_MIN_CONFIDENCE", "0.65"))
+VISION_TIMEOUT_SECONDS = int(os.getenv("VISION_TIMEOUT_SECONDS", "900"))
+
+# --- Ground truth (used only to build few-shot resume examples) ------------
+GROUND_TRUTH_PATH = Path(
+    os.getenv("GROUND_TRUTH_PATH", str(Path(__file__).resolve().parent.parent / "ground_truth_resumes.json"))
+)
+
+# --- Request/extraction limits ----------------------------------------------
+MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))
+MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "24000"))
+MAX_EXAMPLES = int(os.getenv("MAX_EXAMPLES", "2"))
+REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "480"))
+OLLAMA_MAX_RETRIES = int(os.getenv("OLLAMA_MAX_RETRIES", "2"))
+ENABLE_REPAIR_PASS = _bool_env("ENABLE_REPAIR_PASS", True)
+
+# --- OCR ---------------------------------------------------------------------
+# Windows default install path. Override with TESSERACT_CMD if needed; on
+# Linux/macOS with tesseract on PATH, this is simply left unset.
+_DEFAULT_WINDOWS_TESSERACT = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+TESSERACT_CMD = os.getenv("TESSERACT_CMD", _DEFAULT_WINDOWS_TESSERACT)
+
+
+def configure_tesseract() -> None:
+    """Point pytesseract at a custom tesseract binary if one is configured."""
+    import pytesseract
+
+    if os.name == "nt" and Path(TESSERACT_CMD).exists():
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+    elif os.getenv("TESSERACT_CMD") and Path(TESSERACT_CMD).exists():
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
