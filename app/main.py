@@ -13,6 +13,9 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+# Aliased: "Form" is also one of this project's document types, so the bare
+# name would be ambiguous when read next to predicted_type == "Form".
+from fastapi import Form as FormField
 
 from app import config
 from app.document_service import GROUND_TRUTH_RESUMES, parse_document
@@ -67,7 +70,29 @@ def health_check() -> dict[str, Any]:
 
 
 @app.post("/upload")
-async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
+async def upload_pdf(
+    file: UploadFile = File(...),
+    handwriting: bool | None = FormField(None),
+) -> dict[str, Any]:
+    """Parse one PDF.
+
+    `handwriting` controls the vision pass per request, overriding the
+    ENABLE_HANDWRITING default:
+
+      - omitted -> use the ENABLE_HANDWRITING setting (unchanged behaviour)
+      - true    -> run the vision model on this document
+      - false   -> skip it
+
+    This is an explicit switch rather than an auto-detect on purpose. The
+    obvious automatic signal -- mean OCR confidence -- does not actually
+    separate the two cases: measured on real samples, a typed scanned form
+    came out at 88 and a handwritten one at 82, because printed field
+    labels dominate the statistics on both. A threshold in that gap would
+    misfire in both directions, sending typed forms through an expensive
+    vision pass and skipping it on genuinely handwritten ones. The caller
+    knows which documents are handwritten; a wrong guess is worse than
+    asking.
+    """
     filename = Path(file.filename or "unnamed.pdf").name
     if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
@@ -93,7 +118,8 @@ async def upload_pdf(file: UploadFile = File(...)) -> dict[str, Any]:
         parsing_seconds = time.perf_counter() - parsing_start
 
         handwriting_seconds = 0.0
-        if predicted_type == "Form" and config.ENABLE_HANDWRITING:
+        use_handwriting = config.ENABLE_HANDWRITING if handwriting is None else handwriting
+        if predicted_type == "Form" and use_handwriting:
             handwriting_start = time.perf_counter()
             handwriting = extract_handwritten_application_fields(file_bytes)
             merge_handwritten_fields(parsed_output, handwriting)

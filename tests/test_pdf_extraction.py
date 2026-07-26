@@ -87,6 +87,69 @@ def test_column_split_keeps_dates_attached_to_their_job_entry(resumes_dir):
         )
 
 
+def test_two_column_section_is_not_interleaved(resumes_dir):
+    """Regression test for a real bug verified against the rendered page:
+    henrietta_mitchell_...pdf runs full width at the top (contact, summary,
+    experience) and then splits into two columns at the bottom --
+    "EDUCATION & CERTIFICATIONS" on the left, "EXTRACURRICULAR ACTIVITIES"
+    on the right.
+
+    The old whole-page column heuristic had to classify the entire page as
+    either one-column or two-column, so it read the bottom section by plain
+    y-order and interleaved the two columns row by row: "Bachelor of
+    Business Administration" was immediately followed by "President,
+    Business Club" from the *other* column, which then got attributed to
+    the degree. Each column must be read through completely before the
+    next one starts.
+    """
+    pdf_path = resumes_dir / "henrietta_mitchell_business_management_analysis.pdf"
+    if not pdf_path.exists():
+        return
+    text = extract_pdf_text(pdf_path.read_bytes())
+
+    education_start = text.index("EDUCATION & CERTIFICATIONS")
+    activities_start = text.index("EXTRACURRICULAR ACTIVITIES")
+    assert education_start < activities_start, "left column should be read before the right column"
+
+    education_block = text[education_start:activities_start]
+    # Every education/certification entry belongs in the left column block,
+    # uninterrupted by anything from the activities column.
+    for expected in (
+        "Bachelor of Business Administration",
+        "Majors: Analytics and Project Management",
+        "Graduate Project Management Certification",
+        "Impact Evaluation Methods 3-Day Short Course",
+        "Liceria & Co.",
+    ):
+        assert expected in education_block, f"{expected!r} should be in the education column"
+
+    # ...and nothing from the activities column should have leaked into it.
+    for activity in ("President, Business Club", "Community Volunteer", "Paucek and Lage"):
+        assert activity not in education_block, (
+            f"{activity!r} leaked into the education column -- the two columns are interleaved again"
+        )
+
+
+def test_wrapped_url_is_rejoined(resumes_dir):
+    """Regression test for a real bug: a long URL in a narrow column wraps
+    mid-token and PyMuPDF reports each visual line as its own block
+    ('https://www.linkedin.com/in/s' + 'ebastian-bennett?'). Emitted as two
+    lines, a consumer reassembles them with a separator that was never in
+    the document, producing an invalid URL.
+    """
+    for filename, expected_url in (
+        ("sebastian_bennett_real_estate_agent.pdf", "https://www.linkedin.com/in/sebastian-bennett?"),
+        ("lorna_alvarado_marketing_manager.pdf", "https://www.linkedin.com/in/lorna-alvarado?"),
+    ):
+        pdf_path = resumes_dir / filename
+        if not pdf_path.exists():
+            continue
+        text = extract_pdf_text(pdf_path.read_bytes())
+        assert expected_url in text, f"{filename}: expected the wrapped URL to be rejoined intact"
+        assert "/in/s\nebastian" not in text
+        assert "linkedin.com/i\nn/" not in text
+
+
 def test_render_pages_as_jpeg_base64_returns_one_image_per_page():
     images = render_pages_as_jpeg_base64(make_invoice_pdf())
     assert len(images) == 1

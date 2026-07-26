@@ -9,6 +9,7 @@ and the final total.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.json_utils import dedupe_strings
@@ -33,6 +34,36 @@ _TOTAL_LABELS = (r"total\s*due", r"grand\s*total", r"balance\s*due", r"\btotal\b
 _CHANGE_LABELS = (r"change\s*(?:due)?",)
 _PAYMENT_METHOD_LABELS = (r"payment\s*method", r"paid\s*(?:by|via)", r"tender(?:ed)?\s*type")
 
+# A card payment is printed as its own line naming the method and the masked
+# card number: "Visa Contactless **** 1842", "Mastercard **** 6031". That
+# line is unambiguous, which matters because the surrounding text can easily
+# mislead a model into guessing: a grocery receipt reading
+# "Cashier 06 / Terminal 03" was extracted as payment_method "Cash" even
+# though the payment line plainly said "Visa Contactless".
+_CARD_PAYMENT_LINE = re.compile(
+    r"^[ \t]*([A-Za-z][A-Za-z ./&'-]{1,40}?)[ \t]+\*{2,}[ \t]*(\d{4})[ \t]*$",
+    re.MULTILINE,
+)
+# Word-boundary matched so "Cashier" is not read as "Cash".
+_CASH_WORD = re.compile(r"\bcash\b", re.IGNORECASE)
+
+
+def extract_payment_details(text: str) -> tuple[str | None, str | None]:
+    """Read the payment method and masked card digits literally off the receipt.
+
+    Returns ``(method, card_last4)``, either of which may be None. A matched
+    card line is strong evidence -- the method is named right next to the
+    masked number -- so callers should prefer it over a model's inference.
+    The cash fallback is weaker (it only looks for the word anywhere in the
+    document) and is treated as a gap-filler rather than an override.
+    """
+    match = _CARD_PAYMENT_LINE.search(text)
+    if match:
+        return match.group(1).strip(), match.group(2)
+    if _CASH_WORD.search(text):
+        return "Cash", None
+    return None, None
+
 
 def _enrich(result: dict[str, Any], text: str) -> None:
     fields = result.setdefault("fields", {})
@@ -40,6 +71,18 @@ def _enrich(result: dict[str, Any], text: str) -> None:
     receipt_number = extract_labeled_value(text, _RECEIPT_NUMBER_LABELS)
     if receipt_number and not fields.get("receipt_number"):
         fields["receipt_number"] = receipt_number
+
+    # Deterministic payment details take precedence over the model's answer
+    # when the receipt actually prints a card line: the printed line is the
+    # document's own statement of how it was paid, whereas the model's value
+    # is an inference that can be pulled off course by nearby wording.
+    card_method, card_last4 = extract_payment_details(text)
+    if card_last4:
+        fields["payment_method"] = card_method
+        if not fields.get("card_last4"):
+            fields["card_last4"] = card_last4
+    elif card_method and not fields.get("payment_method"):
+        fields["payment_method"] = card_method
 
     payment_method = extract_labeled_value(text, _PAYMENT_METHOD_LABELS)
     if payment_method and not fields.get("payment_method"):

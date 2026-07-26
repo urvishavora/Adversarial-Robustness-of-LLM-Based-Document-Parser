@@ -77,94 +77,201 @@ def _looks_like_header_is_present(page: "fitz.Page", first_page_text: str) -> bo
     return normalized_largest in normalized_primary
 
 
-def _split_into_columns(blocks: list[tuple]) -> list[list[tuple]] | None:
-    """Detect a genuine two-column layout and split blocks accordingly.
+def _cut_groups(blocks: list[tuple], axis: int, min_gap: float) -> list[list[tuple]]:
+    """Split blocks into groups separated by a clean gap along one axis.
 
-    Returns None (meaning: don't split, use a plain vertical sort) unless a
-    genuine column boundary is found: a wide x-gap where both sides have a
-    substantial, roughly balanced number of blocks, AND no block's content
-    actually crosses that boundary.
-
-    That last check matters: naively picking the single widest gap in the
-    page's x0 values is unreliable. A resume can have a wide *spurious* gap
-    that has nothing to do with the real column layout -- e.g. a second
-    reference entry or a right-aligned date badge starting well to the right
-    of the main column's left margin, purely because nothing else happens to
-    print in between. Picking that gap as the split point then lumps a
-    right-aligned date badge (which visually belongs to the row/entry in the
-    main column, just aligned to its right edge) into the sidebar bucket,
-    and a plain y-sort of the sidebar scatters that date among unrelated
-    sidebar content. The fix: a real column boundary is one where blocks
-    don't straddle it -- a left-side block's right edge (x1) shouldn't
-    extend deep past the split line, since two side-by-side columns by
-    definition don't overlap in x. A right-aligned date badge within the
-    main column's row *does* end near (not deep past) that column's own
-    right margin, so it still passes; a genuinely different, wider block
-    (like a paragraph) that happens to start left of a spurious gap but end
-    far to its right fails this check and correctly rules the gap out.
+    A gap only counts when *no* block spans it: walking the blocks in order
+    of their leading edge, a new group starts whenever the next block
+    begins at least ``min_gap`` past the furthest trailing edge seen so
+    far. That "furthest trailing edge" bookkeeping is what makes the cut
+    safe -- a wide block straddling the gap keeps everything in one group,
+    which is exactly the desired behaviour for a full-width heading sitting
+    above two columns.
     """
-    if len(blocks) < 12:
-        return None
+    start_index, end_index = (0, 2) if axis == 0 else (1, 3)
+    ordered = sorted(blocks, key=lambda block: block[start_index])
 
-    xs = sorted(block[0] for block in blocks)
-    page_width = max(block[2] for block in blocks) - min(block[0] for block in blocks)
-    if page_width <= 0:
-        return None
+    groups: list[list[tuple]] = [[ordered[0]]]
+    running_edge = ordered[0][end_index]
+    for block in ordered[1:]:
+        if block[start_index] - running_edge >= min_gap:
+            groups.append([block])
+            running_edge = block[end_index]
+        else:
+            groups[-1].append(block)
+            running_edge = max(running_edge, block[end_index])
+    return groups
 
-    gap_threshold = page_width * 0.15
-    overhang_tolerance = page_width * 0.2
 
-    candidates = sorted(
-        (
-            (xs[i] - xs[i - 1], (xs[i - 1] + xs[i]) / 2)
-            for i in range(1, len(xs))
-            if xs[i] - xs[i - 1] >= gap_threshold
-        ),
-        reverse=True,
-    )
+# A column gap is a large fraction of page width; a section break is a much
+# smaller fraction of page height (it only has to exceed normal line/paragraph
+# spacing, which is why the row threshold is the tighter of the two).
+_COLUMN_GAP_RATIO = 0.05
+_ROW_GAP_RATIO = 0.02
+_MAX_CUT_DEPTH = 8
 
-    # PyMuPDF occasionally merges two same-row, side-by-side section headers
-    # from different columns into a single wide block (e.g. "SUMMARY" and
-    # "EDUCATION" printed on the same line in different columns become one
-    # "SUMMARY   EDUCATION" block spanning almost the full page width).
-    # Such near-full-width blocks are a merge artifact, not evidence that a
-    # candidate split is wrong -- they're excluded from the overhang check
-    # below (though still assigned to a side by x0, same as any block).
-    full_width_threshold = page_width * 0.6
 
-    for _gap, split_x in candidates:
-        left = [block for block in blocks if block[0] < split_x]
-        right = [block for block in blocks if block[0] >= split_x]
+def _xy_cut(blocks: list[tuple], page_width: float, page_height: float, depth: int) -> list[tuple]:
+    """Recursive XY-cut: recover reading order for mixed-layout pages.
 
-        smaller, larger = sorted((len(left), len(right)))
-        if smaller < 8 or smaller / larger < 0.35:
+    The previous approach tried to classify the *whole page* as either
+    one-column or two-column. Real documents aren't that uniform: a resume
+    routinely runs full width at the top (contact line, summary, experience)
+    and then splits into two columns lower down (education | activities).
+    Forcing one global decision gets that page wrong either way -- a
+    whole-page column split mangles the full-width part, and no split at all
+    interleaves the two-column part line by line, so "Bachelor of Business
+    Administration" ends up followed by "President, Business Club" from the
+    neighbouring column.
+
+    XY-cut handles this by deciding locally instead of globally. At each
+    step it looks for a clean vertical gap (a column boundary) and, failing
+    that, a clean horizontal gap (a section break), then recurses into each
+    resulting group. Columns are tried first because a vertical split is the
+    stronger structural claim: it only succeeds when genuinely nothing spans
+    the gap, whereas almost any page can be sliced into horizontal bands.
+    Full-width content therefore blocks a bogus column split automatically,
+    and a region that really is two columns gets read down one column before
+    the other.
+    """
+    if len(blocks) <= 1 or depth >= _MAX_CUT_DEPTH:
+        return sorted(blocks, key=lambda block: (block[1], block[0]))
+
+    column_groups = _cut_groups(blocks, axis=0, min_gap=page_width * _COLUMN_GAP_RATIO)
+    if len(column_groups) > 1:
+        ordered: list[tuple] = []
+        for group in sorted(column_groups, key=lambda g: min(b[0] for b in g)):
+            ordered.extend(_xy_cut(group, page_width, page_height, depth + 1))
+        return ordered
+
+    row_groups = _cut_groups(blocks, axis=1, min_gap=page_height * _ROW_GAP_RATIO)
+    if len(row_groups) > 1:
+        ordered = []
+        for group in sorted(row_groups, key=lambda g: min(b[1] for b in g)):
+            ordered.extend(_xy_cut(group, page_width, page_height, depth + 1))
+        return ordered
+
+    return sorted(blocks, key=lambda block: (block[1], block[0]))
+
+
+def _extract_layout_blocks(page: "fitz.Page") -> list[tuple]:
+    """Build layout units from a page, splitting blocks that span columns.
+
+    PyMuPDF sometimes emits a single block containing lines from two
+    different columns -- two side-by-side section headers on the same row
+    ("EDUCATION & CERTIFICATIONS" and "EXTRACURRICULAR ACTIVITIES") come
+    back as one block, as do the first rows beneath them. No amount of
+    block *reordering* can fix that, because the columns are already fused
+    inside one unit. So any block whose own lines separate cleanly along x
+    is split into one unit per column before ordering happens.
+    """
+    try:
+        data = page.get_text("dict")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Could not read page layout: %s", exc)
+        return [block for block in page.get_text("blocks") if len(block) > 4 and str(block[4]).strip()]
+
+    page_width = max(float(page.rect.width), 1.0)
+    units: list[tuple] = []
+
+    for block in data.get("blocks", []):
+        lines = block.get("lines")
+        if not lines:
             continue
 
-        max_overhang = max(
-            (
-                block[2] - split_x
-                for block in left
-                if (block[2] - block[0]) < full_width_threshold
-            ),
-            default=0.0,
-        )
-        if max_overhang > overhang_tolerance:
+        line_items: list[tuple] = []
+        for line in lines:
+            text = "".join(span.get("text", "") for span in line.get("spans", []))
+            if text.strip():
+                bbox = line["bbox"]
+                line_items.append((bbox[0], bbox[1], bbox[2], bbox[3], text.strip()))
+        if not line_items:
             continue
 
-        return [left, right]
+        groups = _cut_groups(line_items, axis=0, min_gap=page_width * _COLUMN_GAP_RATIO)
+        for group in groups:
+            group_sorted = sorted(group, key=lambda item: (item[1], item[0]))
+            units.append(
+                (
+                    min(item[0] for item in group),
+                    min(item[1] for item in group),
+                    max(item[2] for item in group),
+                    max(item[3] for item in group),
+                    "\n".join(item[4] for item in group_sorted),
+                )
+            )
 
-    return None
+    return units
+
+
+_URL_TAIL_PATTERN = re.compile(r"(https?://|www\.)\S*$", re.IGNORECASE)
+
+
+def _merge_wrapped_url_blocks(blocks: list[tuple]) -> list[str]:
+    """Rejoin a URL that a narrow column split across separate blocks.
+
+    A long URL in a narrow sidebar wraps mid-token, and PyMuPDF reports
+    each visual line as its own block:
+
+        'https://www.linkedin.com/in/s'
+        'ebastian-bennett?'
+
+    Emitted as two lines, a downstream consumer has no way to know they
+    were one token: the model reading this text reassembles it as
+    ``https://www.linkedin.com/in/s/ebastian-bennett?`` -- inserting a
+    separator that was never in the document and producing a URL that
+    doesn't resolve.
+
+    Joining is deliberately narrow, so ordinary text is never glued
+    together. All must hold: the first block ends mid-URL, the next block
+    contains no whitespace at all (a wrapped URL fragment is a single
+    token, whereas ordinary following text almost always has spaces), the
+    two share a left edge (same column), and they are vertically adjacent
+    (within ~1.5 line heights). Chained continuations are supported for a
+    URL wrapped across three or more lines.
+    """
+    texts: list[str] = []
+    consumed: set[int] = set()
+
+    for index, block in enumerate(blocks):
+        if index in consumed:
+            continue
+
+        text = str(block[4]).strip()
+        current = block
+        next_index = index + 1
+
+        while next_index < len(blocks) and _URL_TAIL_PATTERN.search(text):
+            candidate = blocks[next_index]
+            candidate_text = str(candidate[4]).strip()
+
+            if not candidate_text or re.search(r"\s", candidate_text):
+                break
+            if abs(candidate[0] - current[0]) > 2.0:
+                break
+
+            line_height = max(current[3] - current[1], 1.0)
+            vertical_gap = candidate[1] - current[3]
+            if vertical_gap < -1.0 or vertical_gap > line_height * 1.5:
+                break
+
+            text += candidate_text
+            consumed.add(next_index)
+            current = candidate
+            next_index += 1
+
+        texts.append(text)
+
+    return texts
 
 
 def _order_blocks_reading_order(blocks: list[tuple]) -> list[tuple]:
-    columns = _split_into_columns(blocks)
-    if not columns:
-        return sorted(blocks, key=lambda block: (block[1], block[0]))
+    if not blocks:
+        return []
 
-    ordered: list[tuple] = []
-    for column in columns:
-        ordered.extend(sorted(column, key=lambda block: (block[1], block[0])))
-    return ordered
+    page_width = max(max(b[2] for b in blocks) - min(b[0] for b in blocks), 1.0)
+    page_height = max(max(b[3] for b in blocks) - min(b[1] for b in blocks), 1.0)
+    return _xy_cut(blocks, page_width, page_height, 0)
 
 
 # --- OCR ---------------------------------------------------------------------
@@ -234,11 +341,9 @@ def extract_pdf_text(file_bytes: bytes) -> str:
         pages: list[str] = []
         first_page_text = ""
         for page_number, page in enumerate(document, start=1):
-            raw_blocks = [
-                block for block in page.get_text("blocks") if len(block) > 4 and str(block[4]).strip()
-            ]
+            raw_blocks = _extract_layout_blocks(page)
             ordered_blocks = _order_blocks_reading_order(raw_blocks)
-            page_text = "\n".join(str(block[4]).strip() for block in ordered_blocks)
+            page_text = "\n".join(_merge_wrapped_url_blocks(ordered_blocks))
             if page_number == 1:
                 first_page_text = page_text
             if page_text:

@@ -508,6 +508,60 @@ def validation_issues(resume: dict[str, Any], source_text: str) -> list[str]:
     if any(word in activity_text for word in ("certification", "certificate", "license", "licence")):
         issues.append("Certification content appears inside activities.")
 
+    # --- Cross-field completeness checks -------------------------------------
+    # The checks above catch a whole section going missing. These catch the
+    # quieter failure: the section is present, but individual entries are
+    # missing a field the document plainly shows. Left unflagged, those look
+    # like clean successes -- an experience entry with no employer, or a URL
+    # that got mangled during extraction, reads as valid JSON either way.
+    for index, entry in enumerate(resume.get("experience", [])):
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("company"):
+            issues.append(f"Experience entry {index + 1} is missing the employer/company name.")
+        # A job title is a short noun phrase. When a responsibility sentence
+        # slides into that slot instead (observed: job_title set to "Led
+        # development of an advanced automation system..."), the entry still
+        # looks structurally valid, so only the length gives it away.
+        job_title_value = str(entry.get("job_title") or "")
+        if len(job_title_value) > 100 or len(job_title_value.split()) > 14:
+            issues.append(
+                f"Experience entry {index + 1} has a suspiciously long job_title -- "
+                f"a responsibility sentence may have been placed in it."
+            )
+
+    for index, entry in enumerate(resume.get("education", [])):
+        if not isinstance(entry, dict):
+            continue
+        if not entry.get("institution"):
+            issues.append(f"Education entry {index + 1} is missing the institution name.")
+        if not entry.get("degree"):
+            issues.append(f"Education entry {index + 1} is missing the degree/qualification.")
+
+    contact = resume.get("contact")
+    if isinstance(contact, dict):
+        # Whitespace-free copy of the source, so a URL that the document
+        # wrapped across lines still matches the single-token form.
+        condensed_source = re.sub(r"\s+", "", source_text).lower()
+        for field in ("linkedin", "website", "portfolio", "email"):
+            value = contact.get(field)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            candidate = re.sub(r"\s+", "", value).lower()
+            if len(candidate) < 6:
+                continue
+            # Verifying against the source beats checking the URL's shape.
+            # A URL rebuilt from text that wrapped mid-token comes back with
+            # a separator that was never in the document
+            # ("/in/s/ebastian-bennett" for "/in/sebastian-bennett") -- that
+            # is perfectly well-formed as a URL, so no structural check can
+            # catch it, but it does not appear in the document and this does.
+            if candidate not in condensed_source:
+                issues.append(
+                    f"contact.{field} does not appear in the source document "
+                    f"and may be mangled or invented: {value!r}"
+                )
+
     return issues
 
 

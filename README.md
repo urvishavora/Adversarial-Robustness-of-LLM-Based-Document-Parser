@@ -232,6 +232,42 @@ or add a label pattern to its regex enrichment (e.g. `app/parsers/invoice.py`
   - All 10 real sample resumes and 15 real report/contract/form PDFs the
     user supplied now classify correctly; covered by 5 new tests in
     `tests/test_classification.py`.
+- **Reading order rewritten as a recursive XY-cut.** The old logic had to
+  classify a whole page as either one-column or two-column. Real pages
+  aren't uniform: `henrietta_mitchell_...pdf` runs full width at the top
+  (contact, summary, experience) and splits into two columns at the bottom
+  ("EDUCATION & CERTIFICATIONS" | "EXTRACURRICULAR ACTIVITIES"). One
+  global decision gets that page wrong either way, and it was being read
+  by plain y-order, interleaving the two columns row by row -- "Bachelor of
+  Business Administration" immediately followed by "President, Business
+  Club" from the *other* column, which then got attributed to the degree.
+  `_xy_cut` now decides locally: at each step it looks for a clean vertical
+  gap (column boundary), falling back to a clean horizontal gap (section
+  break), and recurses. Columns are tried first because a vertical split
+  only succeeds when genuinely nothing spans the gap, so full-width content
+  automatically prevents a bogus column split.
+  - PyMuPDF also sometimes emits a *single block* containing lines from two
+    different columns, which no amount of reordering can fix because the
+    columns are already fused inside one unit. `_extract_layout_blocks`
+    now splits any block whose own lines separate cleanly along x.
+  - Verified against the rendered page image, not just the text dump.
+    Regression test: `test_two_column_section_is_not_interleaved`.
+- **Wrapped URLs are rejoined.** A long URL in a narrow column wraps
+  mid-token and PyMuPDF reports each visual line as its own block
+  (`https://www.linkedin.com/in/s` + `ebastian-bennett?`). Emitted as two
+  lines, the model reassembled them with a separator that was never in the
+  document, producing `.../in/s/ebastian-bennett?` -- a URL that doesn't
+  resolve. Joining is deliberately narrow (same left edge, vertically
+  adjacent, continuation contains no whitespace) so ordinary text is never
+  glued together. Affected Sebastian Bennett and Lorna Alvarado.
+- **Cross-field validation added.** The existing checks only fired when an
+  entire section went missing. These catch the quieter failure where a
+  section is present but an entry is missing a field the document plainly
+  shows: experience entries with no employer, education entries with no
+  institution or degree, and contact URLs/emails that don't appear
+  anywhere in the source document. That last check is what catches a
+  mangled URL -- `.../in/s/ebastian-bennett?` is perfectly well-formed, so
+  no structural check can flag it, but it isn't in the document.
 - **Receipt-vs-Invoice fix.** `clean_receipt_05_electronics_store.pdf` --
   a store receipt whose header reads "SALES INVOICE" -- was classified
   Invoice. Root cause was two separate flaws:

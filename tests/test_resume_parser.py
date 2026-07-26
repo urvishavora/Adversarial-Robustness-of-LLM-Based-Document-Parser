@@ -89,17 +89,65 @@ def test_validation_issues_flags_missing_name_and_sections():
 
 
 def test_validation_issues_clean_resume_has_no_issues():
+    source_text = "Experience: Acme. Education: State U, BSc. Skills: Python"
+    resume = {
+        "name": {"full_name": "Jane Doe"},
+        "job_title": "Engineer",
+        "summary": "Experienced engineer",
+        "education": [{"institution": "State U", "degree": "BSc"}],
+        "experience": [{"company": "Acme", "job_title": "Engineer"}],
+        "skills": ["Python"],
+        "activities": [],
+    }
+    assert validation_issues(resume, source_text) == []
+
+
+def test_validation_issues_flags_missing_company_and_degree():
+    """The section-level checks only fire when a whole section vanishes.
+    These catch the quieter failure -- the section is there, but an entry
+    is missing a field the document plainly shows, which otherwise reads
+    as a clean success.
+    """
     source_text = "Experience: Acme. Education: State U. Skills: Python"
     resume = {
         "name": {"full_name": "Jane Doe"},
         "job_title": "Engineer",
         "summary": "Experienced engineer",
         "education": [{"institution": "State U"}],
-        "experience": [{"company": "Acme"}],
+        "experience": [{"job_title": "Engineer"}],
         "skills": ["Python"],
         "activities": [],
     }
-    assert validation_issues(resume, source_text) == []
+    issues = validation_issues(resume, source_text)
+    assert any("missing the employer/company" in issue for issue in issues)
+    assert any("missing the degree" in issue for issue in issues)
+
+
+def test_validation_issues_flags_url_not_present_in_source():
+    """A URL rebuilt from text that wrapped mid-token comes back with a
+    separator that was never in the document. It is still a well-formed
+    URL, so no structural check catches it -- but it does not appear in
+    the source, and that does.
+    """
+    source_text = (
+        "Sebastian Bennett\nhttps://www.linkedin.com/in/sebastian-bennett?\n"
+        "Experience: Really Great Company. Education: University, B.A. Skills: Negotiation"
+    )
+    base = {
+        "name": {"full_name": "Sebastian Bennett"},
+        "job_title": "Real Estate Agent",
+        "summary": "Experienced agent",
+        "education": [{"institution": "University", "degree": "B.A."}],
+        "experience": [{"company": "Really Great Company", "job_title": "Real Estate Agent"}],
+        "skills": ["Negotiation"],
+        "activities": [],
+    }
+
+    mangled = dict(base, contact={"linkedin": "https://www.linkedin.com/in/s/ebastian-bennett?"})
+    assert any("does not appear in the source" in issue for issue in validation_issues(mangled, source_text))
+
+    correct = dict(base, contact={"linkedin": "https://www.linkedin.com/in/sebastian-bennett?"})
+    assert validation_issues(correct, source_text) == []
 
 
 def test_validation_issues_flags_degree_like_experience_entry():

@@ -44,7 +44,7 @@ def call_ollama(prompt: str, *, max_retries: int | None = None, num_predict: int
                     "options": {
                         "temperature": 0,
                         "num_predict": num_predict,
-                        "num_ctx": 32768,
+                        "num_ctx": config.OLLAMA_NUM_CTX,
                         "repeat_penalty": 1.05,
                     },
                 },

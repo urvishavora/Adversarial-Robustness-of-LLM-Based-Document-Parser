@@ -124,3 +124,40 @@ def test_upload_resume_end_to_end(resumes_dir):
     body = response.json()
     assert body["predicted_document_type"] == "Resume"
     assert body["parsed_output"]["name"]["full_name"] == "Jamie Rivera"
+
+
+def test_handwriting_flag_controls_vision_pass():
+    """The vision pass is expensive and only helps handwritten documents, so
+    it must be switchable per request rather than running on every form.
+
+    Deliberately an explicit flag, not an auto-detect: mean OCR confidence
+    (the obvious automatic signal) measured 88 on a typed scanned form and
+    82 on a handwritten one, because printed field labels dominate both.
+    A threshold in that gap would misfire both ways.
+    """
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from tests.fixtures.synthetic_pdfs import make_application_form_pdf
+
+    pdf_bytes = make_application_form_pdf()
+    client = TestClient(app)
+    model_output = {"document_type": "Form", "summary": None, "fields": {"application_id": "APP2024X771"}}
+
+    def upload(data):
+        with patch("app.parsers.generic.call_ollama", return_value=model_output), patch(
+            "app.main.extract_handwritten_application_fields"
+        ) as vision, patch("app.main.merge_handwritten_fields"):
+            vision.return_value = {"source": "ollama_vision"}
+            response = client.post(
+                "/upload",
+                files={"file": ("form.pdf", pdf_bytes, "application/pdf")},
+                data=data,
+            )
+            assert response.status_code == 200
+            return vision.called
+
+    assert upload({"handwriting": "false"}) is False, "handwriting=false must skip the vision pass"
+    assert upload({"handwriting": "true"}) is True, "handwriting=true must run the vision pass"

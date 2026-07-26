@@ -113,3 +113,78 @@ def test_parse_application_form_enriches_id_and_declaration():
     assert result["document_type"] == "Form"
     assert result["fields"]["application_id"] == "APP2024X771"
     assert "declare" in result["fields"]["declaration"].lower()
+
+
+def test_payment_method_read_from_card_line_not_guessed():
+    """Regression test for a real error on clean_receipt_01_grocery_store.pdf:
+    payment_method came back as "Cash" even though the receipt's payment line
+    plainly reads "Visa Contactless **** 1842". The misleading nearby text is
+    "Cashier 06 / Terminal 03" -- so the word-boundary matching matters, since
+    "Cashier" must not be read as "Cash".
+    """
+    from app.parsers.receipt import extract_payment_details
+
+    text = (
+        "Maple Basket Market\n"
+        "Cashier 06 / Terminal 03\n"
+        "Subtotal\n$62.80\n"
+        "PAYMENT\n"
+        "Approved  |  CAD  65.14\n"
+        "Visa Contactless **** 1842\n"
+        "Thank you for your purchase.\n"
+    )
+    assert extract_payment_details(text) == ("Visa Contactless", "1842")
+
+
+def test_payment_method_detects_genuine_cash_sale():
+    from app.parsers.receipt import extract_payment_details
+
+    text = (
+        "Corner Store\n"
+        "PAYMENT\n"
+        "Transaction approved - cash sale\n"
+        "Cash CAD 50.00\n"
+        "Change 1.17\n"
+    )
+    assert extract_payment_details(text) == ("Cash", None)
+
+
+def test_cashier_alone_is_not_read_as_cash_payment():
+    from app.parsers.receipt import extract_payment_details
+
+    assert extract_payment_details("Cashier 06 / Terminal 03\nTotal CAD $10.00\n") == (None, None)
+
+
+def test_all_real_receipt_payment_methods_match_ground_truth(receipts_dir, receipts_ground_truth_path):
+    """Reads payment method + masked card digits straight off each real
+    receipt and checks them against the bundled ground truth. This path is
+    fully deterministic (no model involved), so it is expected to match
+    exactly rather than approximately.
+    """
+    import json
+
+    from app.parsers.receipt import extract_payment_details
+    from app.pdf_extraction import extract_pdf_text
+
+    if not receipts_ground_truth_path.exists():
+        return
+    truth = {
+        record["filename"]: record
+        for record in json.loads(receipts_ground_truth_path.read_text())["receipts"]
+    }
+
+    mismatches = []
+    for pdf_path in sorted(receipts_dir.glob("*.pdf")):
+        expected = truth.get(pdf_path.name, {}).get("payment", {})
+        method, last4 = extract_payment_details(extract_pdf_text(pdf_path.read_bytes()))
+        expected_last4 = expected.get("card_last_four")
+        if expected_last4 and last4 != expected_last4:
+            mismatches.append((pdf_path.name, "card_last4", last4, expected_last4))
+        # Receipt 04 prints "Debit Interac" while the ground truth normalizes
+        # it to "Interac Debit". The parser reproduces what the document
+        # actually says, so compare on the words present, not their order.
+        if method and expected.get("method"):
+            if sorted(method.lower().split()) != sorted(str(expected["method"]).lower().split()):
+                mismatches.append((pdf_path.name, "method", method, expected["method"]))
+
+    assert not mismatches, f"payment details did not match ground truth: {mismatches}"

@@ -44,6 +44,23 @@ MAX_FILE_SIZE = int(os.getenv("MAX_FILE_SIZE", str(10 * 1024 * 1024)))
 MAX_PROMPT_CHARACTERS = int(os.getenv("MAX_PROMPT_CHARACTERS", "24000"))
 MAX_EXAMPLES = int(os.getenv("MAX_EXAMPLES", "2"))
 REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "480"))
+
+# Context window requested from Ollama. This is the single biggest lever on
+# memory use and therefore on speed: the KV cache scales linearly with it,
+# and for an 8B model it costs very roughly 128 KB per token -- about 4 GB
+# at 32768 tokens versus 1 GB at 8192. If that pushes the machine into
+# swap, generation slows by an order of magnitude.
+#
+# Nothing here needs a large window. Prompts are capped at
+# MAX_PROMPT_CHARACTERS (24000 chars, so ~6000 tokens even in the worst
+# case; a typical resume prompt measures ~2800) and generation is capped at
+# num_predict (6000). 16384 leaves comfortable headroom above that
+# worst-case ~12000 while halving the KV cache versus the previous
+# hardcoded 32768. Lower it to 8192 on a memory-constrained machine --
+# still above what a resume needs -- but do not set it below
+# MAX_PROMPT_CHARACTERS/4 + num_predict, because Ollama silently truncates
+# the prompt to fit, which loses document content rather than erroring.
+OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
 OLLAMA_MAX_RETRIES = int(os.getenv("OLLAMA_MAX_RETRIES", "2"))
 ENABLE_REPAIR_PASS = _bool_env("ENABLE_REPAIR_PASS", True)
 
