@@ -18,8 +18,18 @@ def resumes_dir() -> Path:
 
 
 @pytest.fixture(scope="session")
+def receipts_dir() -> Path:
+    return PROJECT_ROOT / "receipts"
+
+
+@pytest.fixture(scope="session")
 def ground_truth_path() -> Path:
     return PROJECT_ROOT / "ground_truth_resumes.json"
+
+
+@pytest.fixture(scope="session")
+def receipts_ground_truth_path() -> Path:
+    return PROJECT_ROOT / "ground_truth_receipts.json"
 
 
 @pytest.fixture(scope="session")

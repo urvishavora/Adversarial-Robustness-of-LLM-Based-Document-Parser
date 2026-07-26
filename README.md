@@ -185,3 +185,77 @@ or add a label pattern to its regex enrichment (e.g. `app/parsers/invoice.py`
   regardless). Everything not dependent on a live model was tested for
   real here; the LLM-dependent paths need to be run against your own Ollama
   to get real accuracy numbers.
+- **Real numeric accuracy scores only exist for resumes**, because that's
+  the only type with a ground-truth file (`ground_truth_resumes.json`).
+  Accuracy is "does the output match a known-correct answer" -- for
+  invoices/receipts/contracts/reports/forms there's no equivalent
+  known-correct reference shipped with this project, so all that can
+  honestly be checked for those types is: did it error, was the document
+  type classified correctly, and do the extracted fields look complete and
+  plausible against the source PDF. If you want real scores for those
+  types too, the same pattern as `ground_truth_resumes.json` /
+  `scripts/score_resumes.py` can be extended once you have (or hand-label)
+  a few correct-answer files for them.
+- **Classification fix (2026-07-26):** `app/classification.py` originally
+  counted a few single generic words ("experience", "education", "skills")
+  as a Resume signal anywhere they appeared in the text. That
+  misclassified some academic-paper-style reports as Resume, because a
+  paper can mention "patient education" or "clinical experience" inline
+  without being a resume. Fixed by only counting those words when they
+  appear as their own short heading line (the way an actual resume uses
+  them), not buried in a sentence -- a structural fix, not a per-file one.
+  Covered by `tests/test_classification.py::test_academic_report_not_misclassified_as_resume`.
+- **Follow-up classification fixes (same day), found by testing against 15
+  real report/contract/form PDFs and all 10 real resumes directly (no LLM
+  needed -- classification is deterministic):**
+  - Several real resume templates render section headers with deliberate
+    letter-spacing ("E D U C A T I O N"), which the header-only check above
+    didn't recognize as "education". Fixed by comparing whitespace-collapsed
+    forms on both sides instead of exact strings.
+  - The header check alone was too loose: a single "Education" heading on
+    an otherwise-unrelated document (a loan/job application form legitimately
+    asking about schooling) was enough to tip it to Resume. Fixed by
+    requiring at least two distinct resume-style headers together
+    (experience/education/skills/employment), which is how real resumes
+    actually use them and forms don't.
+  - "work experience" and "employment history" were removed from the plain
+    substring keyword list -- real bank/loan forms use those exact phrases
+    as field labels too (e.g. "Total Work Experience Years"), so they
+    weren't resume-exclusive.
+  - Added a checkbox-density signal for Form: heavily-OCR'd scanned forms
+    are dense with short bracketed checkbox glyphs (`[ ]`, `[_]`, `[J]`)
+    that survive OCR far more reliably than exact label text does, which
+    matters when OCR garbles labels like "Date of Birth" into
+    "DateofBirth". Numeric bracket citations (`[1]`, `[12]`) are excluded
+    from this count so a citation-heavy academic Report isn't mistaken for
+    a checkbox-heavy Form.
+  - All 10 real sample resumes and 15 real report/contract/form PDFs the
+    user supplied now classify correctly; covered by 5 new tests in
+    `tests/test_classification.py`.
+- **Receipt-vs-Invoice fix.** `clean_receipt_05_electronics_store.pdf` --
+  a store receipt whose header reads "SALES INVOICE" -- was classified
+  Invoice. Root cause was two separate flaws:
+  - `subtotal` was scored as an *Invoice* signal, but it appears on 10/10
+    of the real sample receipts too. Shared billing vocabulary can't
+    separate the two types, so it only ever added noise. The Invoice and
+    Receipt keyword lists are now restricted to what actually
+    distinguishes them: an invoice *requests* payment not yet made
+    ("amount due", "due date", "net 30", "remit to"), a receipt
+    *documents* payment already completed ("tendered", "auth code",
+    "paid in full", "thank you for your purchase").
+  - The two types then tied 2-2, and `max()` silently resolved the tie by
+    dict insertion order -- Invoice simply happened to be declared first.
+    Ties now break on the most specific evidence (longest matched phrase),
+    since a hit on a long distinctive phrase is much stronger evidence
+    than a hit on a short common word, with the type name as a final
+    stable tiebreak.
+  - Note: a bare `approved` was briefly added as a Receipt signal and
+    immediately reverted -- it mislabeled the 8D quality report as a
+    Receipt, because approval/sign-off blocks are just as common in
+    reports, contracts, and forms. Covered by
+    `test_report_with_approval_block_not_misclassified_as_receipt`.
+  - All 10 real receipts now classify correctly, and a real invoice still
+    classifies as Invoice. The 10 receipt sample PDFs and
+    `ground_truth_receipts.json` are now bundled in `receipts/` so
+    `test_all_real_receipts_classify_as_receipt` checks every one of them
+    rather than a single file.
