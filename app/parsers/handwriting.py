@@ -41,15 +41,26 @@ Extract only:
 Printed text is context only. Do not return printed labels as answers unless the
 printed option is visibly selected.
 
-Return exactly one JSON object:
+Return exactly one JSON object shaped like this, replacing every <...>
+placeholder with what you actually see. Never copy a placeholder through
+into your answer:
 
 {
   "entries": [
     {
-      "field": "nearest printed field label",
-      "value": "handwritten or selected value",
-      "confidence": 0.0
+      "field": "<the printed label next to the writing>",
+      "value": "<exactly what is handwritten there>",
+      "confidence": <number between 0 and 1>
     }
+  ]
+}
+
+Worked example (illustrative only -- do not reuse these values):
+
+{
+  "entries": [
+    {"field": "Surname", "value": "Okafor", "confidence": 0.9},
+    {"field": "Occupation", "value": "Electrician", "confidence": 0.8}
   ]
 }
 
@@ -77,6 +88,44 @@ def _clean_confidence(raw: Any) -> float:
     return max(0.0, min(1.0, confidence))
 
 
+# Phrases lifted verbatim from the prompt's schema. A small vision model
+# sometimes echoes the template instead of filling it in, producing entries
+# like {"field": "handwritten or selected value"}. Those are the model
+# copying, not reading, so they are dropped rather than published as data.
+_PROMPT_ECHO_PHRASES = {
+    "handwritten or selected value",
+    "nearest printed field label",
+    "the printed label next to the writing",
+    "exactly what is handwritten there",
+}
+
+
+def _is_degenerate_value(text: str) -> bool:
+    """Detect a runaway-repetition value.
+
+    Small models can fall into a loop and emit a single character or short
+    cycle hundreds of times -- one real run returned a "national insurance
+    number" of 419 followed by ~700 twos. That is never a real handwritten
+    value, and publishing it corrupts the record it lands in.
+    """
+    stripped = re.sub(r"\s+", "", text)
+    if len(stripped) < 24:
+        return False
+    # A long run of one repeated character is the giveaway. Checking overall
+    # variety instead is not enough: "419" followed by 700 twos still has
+    # four distinct characters, so it would pass a set-size test while being
+    # obviously degenerate.
+    if re.search(r"(.)\1{19,}", stripped):
+        return True
+    # A short cycle repeated to length ("ababab...") shows the same way.
+    return len(set(stripped)) <= 2
+
+
+def _is_prompt_echo(text: str) -> bool:
+    cleaned = text.strip().strip("<>").casefold()
+    return cleaned in _PROMPT_ECHO_PHRASES
+
+
 def _clean_handwriting_result(value: Any) -> dict[str, Any]:
     result = _empty_handwriting_result()
     if not isinstance(value, dict):
@@ -94,6 +143,12 @@ def _clean_handwriting_result(value: Any) -> dict[str, Any]:
         field = clean_scalar(item.get("field"))
         entry_value = clean_scalar(item.get("value"))
         confidence = _clean_confidence(item.get("confidence", 0.0))
+
+        # Drop template echoes and runaway repetition before they become data.
+        if field and _is_prompt_echo(str(field)):
+            continue
+        if entry_value and (_is_prompt_echo(str(entry_value)) or _is_degenerate_value(str(entry_value))):
+            continue
 
         if field and entry_value:
             cleaned_entry: dict[str, Any] = {

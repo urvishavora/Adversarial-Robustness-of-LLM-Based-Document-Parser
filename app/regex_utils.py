@@ -132,6 +132,18 @@ _JURISDICTION_TAXES = (
     (r"\b(CGST|SGST|IGST|UTGST)\b", "INR"),  # India's split GST components
 )
 
+# A tax name that several countries share, paired with an address format
+# unique to one of them. "GST" alone is used by Canada, Australia, India,
+# Singapore and New Zealand, so it cannot identify a currency on its own --
+# but a Canadian postal code (letter-digit-letter digit-letter-digit, e.g.
+# "V6C 1V5") is not used anywhere else, and the two together are decisive.
+# This matters in practice: Ontario invoices print HST and were already
+# handled, while GST invoices from BC, Alberta and Manitoba were not.
+_CANADIAN_POSTAL_CODE = r"\b[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d\b"
+_AMBIGUOUS_TAX_WITH_ADDRESS = (
+    (r"\bGST\b", _CANADIAN_POSTAL_CODE, "CAD"),
+)
+
 
 def extract_currency(text: str) -> str | None:
     """Return the currency code printed on the document, if any.
@@ -161,6 +173,11 @@ def extract_currency(text: str) -> str | None:
     # "VAT" is used across Europe and beyond.
     for pattern, code in _JURISDICTION_TAXES:
         if re.search(pattern, text, re.IGNORECASE):
+            return code
+
+    # A shared tax name plus a country-unique address format.
+    for tax_pattern, address_pattern, code in _AMBIGUOUS_TAX_WITH_ADDRESS:
+        if re.search(tax_pattern, text, re.IGNORECASE) and re.search(address_pattern, text):
             return code
 
     # No evidence. Returning None is deliberate -- callers leave the existing

@@ -332,3 +332,115 @@ def test_currency_is_never_guessed_from_a_dollar_sign():
     # Unambiguous symbols and printed codes are still honoured.
     assert extract_currency("Total 1,41,600.00 INR") == "INR"
     assert extract_currency("Total 1,440.00 and VAT applied in GBP") == "GBP"
+
+
+def test_report_flags_heading_only_findings():
+    """Regression test from a real run: the 8D report came back with
+
+        "findings": [{"title": "Problem Description"}, {"title": "Containment"}, ...]
+
+    -- nine section headings and none of the text under them. Content recall
+    for reports measured 3.5% as a result. It passed unnoticed because the
+    output is structurally valid and every heading genuinely appears in the
+    document, so a "is this value present in the source?" check scores it
+    highly. Only a content check catches it.
+    """
+    from app.parsers.report import _enrich
+
+    result = {
+        "fields": {
+            "findings": [{"title": "Problem Description"}, {"title": "Containment"}],
+            "recommendations": [{"title": "Set brush replacement at 7,500 cycles"}],
+        }
+    }
+    _enrich(result, "Report Date: 2026-05-12")
+    warnings = " ".join(result["data_quality_warnings"])
+    assert "2 of 2 findings" in warnings
+    assert "1 of 1 recommendations" in warnings
+
+
+def test_report_accepts_findings_that_carry_content():
+    from app.parsers.report import _enrich
+
+    result = {
+        "fields": {
+            "findings": [
+                {
+                    "heading": "Problem Description",
+                    "content": "The customer found a sharp burr on the oil-channel cross hole.",
+                }
+            ]
+        }
+    }
+    _enrich(result, "Report Date: 2026-05-12")
+    assert result["data_quality_warnings"] == []
+
+
+def test_contract_clauses_recovered_deterministically():
+    """A contract's substance is its clauses, but the model returns only the
+    named summary fields and leaves the body behind -- measured content
+    recall against full-text ground truth was ~18%. Clause structure is a
+    layout property (numbering, heading lines), so it is recovered without
+    the model.
+    """
+    from app.parsers.sections import extract_clauses
+
+    numbered = (
+        "CAR RENTAL AGREEMENT\n"
+        "Background:\n"
+        "1. This Car Rental Agreement is made and entered into on July 14, 2026 between:\n"
+        "Rental Term\n"
+        "3. The term of this Agreement runs from July 15, 2026 to July 19, 2026.\n"
+        "Scope of Use\n"
+        "5. Renter will use the Rented Vehicle only for personal or routine business use.\n"
+    )
+    clauses = extract_clauses(numbered)
+    numbers = [c["clause_number"] for c in clauses]
+    assert numbers == ["1", "3", "5"]
+    assert clauses[1]["heading"] == "Rental Term"
+    assert "July 15, 2026" in clauses[1]["text"]
+
+    # An agreement with no numbering at all (common for NDAs) must still
+    # yield its body rather than nothing.
+    prose = (
+        "INTERNSHIP NON-DISCLOSURE AGREEMENT\n"
+        "Due to the privileged access that the Intern will have to confidential\n"
+        "information, he/she must sign this Agreement.\n"
+    )
+    prose_clauses = extract_clauses(prose)
+    assert prose_clauses, "unnumbered agreements must still produce clause text"
+    assert "privileged access" in prose_clauses[0]["text"]
+
+
+def test_contract_enrich_populates_clauses_without_overwriting_model():
+    from app.parsers.contract import _enrich
+
+    text = "AGREEMENT\nTerm\n1. This Agreement begins on July 14, 2026 and runs for twelve months.\n"
+
+    filled = {"fields": {}}
+    _enrich(filled, text)
+    assert filled["fields"]["clauses"], "clauses should be populated when the model omitted them"
+
+    # A model-supplied clauses array is preferred over the deterministic one.
+    supplied = {"fields": {"clauses": [{"clause_number": "1", "heading": "Term", "text": "from the model"}]}}
+    _enrich(supplied, text)
+    assert supplied["fields"]["clauses"][0]["text"] == "from the model"
+
+
+def test_report_sections_recovered_deterministically():
+    from app.parsers.report import _enrich
+
+    text = (
+        "Automotive 8D Report\n"
+        "D2 Problem Description\n"
+        "The customer found a sharp burr on the oil-channel cross hole of 7 housings.\n"
+        "D3 Containment\n"
+        "Stopped shipment and quarantined 1,920 pieces across four related lots.\n"
+    )
+    result = {"fields": {}}
+    _enrich(result, text)
+    sections = result["fields"]["sections"]
+    assert sections, "report sections should be populated"
+    combined = " ".join(s["text"] for s in sections)
+    assert "sharp burr" in combined
+    assert "quarantined 1,920 pieces" in combined

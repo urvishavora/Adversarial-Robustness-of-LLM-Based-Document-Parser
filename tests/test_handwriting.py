@@ -89,3 +89,51 @@ def test_merge_handwritten_fields_attaches_to_parsed_output():
     merge_handwritten_fields(parsed_output, handwriting)
     assert parsed_output["fields"]["existing"] == "value"
     assert parsed_output["fields"]["handwritten_fields"]["first_name"] == "Sam"
+
+
+def test_prompt_echo_and_repetition_loops_are_discarded():
+    """Regression test from a real granite3.2-vision run. Two failure modes
+    appeared in the output and both would have been published as data:
+
+    - the model echoed the prompt's own schema placeholder, producing
+      {"field": "handwritten or selected value"};
+    - it fell into a repetition loop, returning a "national insurance
+      number" of 419 followed by ~700 twos.
+
+    Note the second is why overall character variety is the wrong test:
+    that string still contains four distinct characters. A long run of one
+    repeated character is the actual signal.
+    """
+    from app.parsers.handwriting import _clean_handwriting_result, _is_degenerate_value
+
+    assert _is_degenerate_value("419" + "2" * 700) is True
+    # Genuine values must survive, including long ones and spaced-out IDs.
+    assert _is_degenerate_value("4 9 K L M T P 5") is False
+    assert _is_degenerate_value("B-104, GREEN PARK SOCIETY, SECTOR 21, NOIDA - 201301") is False
+
+    result = _clean_handwriting_result(
+        {
+            "entries": [
+                {"field": "handwritten or selected value", "value": "Doe", "confidence": 0.5},
+                {"field": "national insurance number", "value": "419" + "2" * 700, "confidence": 0.5},
+                {"field": "Surname", "value": "Okafor", "confidence": 0.9},
+                {"field": "Occupation", "value": "Taxi Driver", "confidence": 0.8},
+            ]
+        }
+    )
+    kept = [(e["field"], e["value"]) for e in result["entries"]]
+    assert kept == [("Surname", "Okafor"), ("Occupation", "Taxi Driver")]
+
+
+def test_canadian_gst_invoice_resolves_currency():
+    """Regression test: GST invoices from BC/AB/MB reported currency as "$"
+    or USD while Ontario HST invoices resolved correctly. "GST" alone is
+    ambiguous (Australia, India, Singapore, NZ all use it), but a Canadian
+    postal code is not used anywhere else -- the pair is decisive.
+    """
+    from app.regex_utils import extract_currency
+
+    assert extract_currency("Vancouver, BC V6C 1V5\nGST 5%\n$180.00") == "CAD"
+    assert extract_currency("Calgary, AB T2C 4S1\nGST 5%\n$95.00") == "CAD"
+    # GST without a Canadian address stays ambiguous rather than guessing.
+    assert extract_currency("12 George St, Sydney NSW 2000\nGST 10%\n$100.00") is None

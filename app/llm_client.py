@@ -131,7 +131,11 @@ def call_ollama_vision(image_base64: str, prompt: str, *, model: str | None = No
             "temperature": 0,
             "num_predict": 800,
             "num_ctx": 16384,
-            "repeat_penalty": 1.05,
+            # Small vision models are prone to repetition loops -- one run
+            # emitted ~700 repeated digits as a "national insurance number".
+            # 1.05 is barely any penalty; 1.2 suppresses the loop without
+            # distorting short factual values like names and dates.
+            "repeat_penalty": 1.2,
         },
     }
 

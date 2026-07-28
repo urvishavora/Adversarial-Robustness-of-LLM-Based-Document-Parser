@@ -8,10 +8,12 @@ a governing-law clause, and any explicitly numbered/dollar terms.
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from app.json_utils import dedupe_strings
 from app.parsers.generic import parse_generic_document
+from app.parsers.sections import extract_clauses
 from app.regex_utils import extract_amounts, extract_dates, extract_labeled_value
 
 _GUIDANCE = """
@@ -25,6 +27,21 @@ CONTRACT-SPECIFIC GUIDANCE:
 - Preserve section/clause numbering (e.g. "3.2") when the source uses it, as a
   clause_number field alongside each extracted clause.
 - Quote defined terms and obligations close to verbatim; do not paraphrase legal language.
+
+- Clause fields (termination_clause, confidentiality_clause, payment_terms,
+  renewal_terms, governing_law) must contain the clause's full operative text as
+  printed, not a one-line label or a truncated opening. If the clause runs to
+  several sentences, include all of them. A clause reduced to its heading has lost
+  the obligation it describes, which is the part that matters.
+
+- Also include a `clauses` array covering every substantive numbered section of the
+  agreement, each as {"clause_number": "<e.g. 3.2 or null>", "heading": "<section
+  heading>", "text": "<the clause's full text>"}. This is what preserves the body
+  of the contract rather than only the handful of named fields above.
+
+- Dates: keep the document's own wording in a `*_as_written` field alongside any
+  normalized value, e.g. effective_date "2026-07-14" plus effective_date_as_written
+  "July 14, 2026", so the printed form is never lost.
 """
 
 _EFFECTIVE_DATE_LABELS = (r"effective\s*date", r"date\s*of\s*(?:this\s*)?agreement")
@@ -33,6 +50,13 @@ _GOVERNING_LAW_LABELS = (r"governing\s*law",)
 
 def _enrich(result: dict[str, Any], text: str) -> None:
     fields = result.setdefault("fields", {})
+
+    # Populate the contract body deterministically. Only fills a gap -- if the
+    # model already produced clauses, its version is kept.
+    if not fields.get("clauses"):
+        clauses = extract_clauses(text)
+        if clauses:
+            fields["clauses"] = clauses
 
     effective_date = extract_labeled_value(text, _EFFECTIVE_DATE_LABELS)
     if effective_date and not fields.get("effective_date"):
