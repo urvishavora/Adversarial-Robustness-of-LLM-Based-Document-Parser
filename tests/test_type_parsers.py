@@ -188,3 +188,147 @@ def test_all_real_receipt_payment_methods_match_ground_truth(receipts_dir, recei
                 mismatches.append((pdf_path.name, "method", method, expected["method"]))
 
     assert not mismatches, f"payment details did not match ground truth: {mismatches}"
+
+
+def test_currency_prefers_printed_code_over_symbol():
+    """Regression test: "$" is shared by many currencies and was being
+    reported as USD on Canadian documents (9 of 10 invoices). A printed ISO
+    code is unambiguous; HST/QST are Canada-specific and identify the
+    currency even when only "$" is shown.
+    """
+    from app.regex_utils import extract_currency
+
+    assert extract_currency("Total CAD $65.14\nApproved | CAD 65.14") == "CAD"
+    assert extract_currency("Total USD $100.00\nSales Tax $8.00") == "USD"
+    assert extract_currency("Total $2,938.00\nHST 13% $338.00") == "CAD"
+    # No evidence at all -> None, so the caller leaves the existing value alone.
+    assert extract_currency("Total $2,938.00\nSales Tax $338.00") is None
+
+
+def test_labeled_amount_honours_priority_order():
+    """Regression test: a restaurant bill prints the pre-tip "Total CAD
+    $151.93" above "Final amount CAD $171.93". The alternation-based helper
+    returns whichever label appears first in the document, so it reported
+    the pre-tip figure. Priority order must be respected instead.
+    """
+    from app.regex_utils import extract_labeled_amount, extract_labeled_amount_in_order
+
+    text = "Total CAD\n$151.93\nTip\n$20.00\nFinal amount CAD\n$171.93\n"
+    labels = (r"final\s*amount", r"\btotal\b")
+
+    assert extract_labeled_amount_in_order(text, labels) == "$171.93"
+    # Documents the old behaviour that caused the bug.
+    assert extract_labeled_amount(text, labels) == "$151.93"
+
+
+def test_named_sales_tax_returns_amount_not_rate():
+    """Regression test: HST was absent from the tax labels, so the tax line
+    fell through to the model, which returned the rate ("13%") instead of
+    the amount ($6.94).
+    """
+    from app.parsers.receipt import _enrich
+
+    result = {"fields": {}}
+    _enrich(result, "Subtotal\n$134.82\nHST 13%\n$6.94\nTotal CAD\n$141.76\n")
+    assert result["fields"]["tax"] == "$6.94"
+    assert result["fields"]["subtotal"] == "$134.82"
+    assert result["fields"]["total"] == "$141.76"
+
+
+def test_all_real_receipt_money_fields_match_ground_truth(receipts_dir, receipts_ground_truth_path):
+    """End-to-end check of the deterministic layer against ground truth,
+    starting from an EMPTY model result -- these fields must be recoverable
+    from the document alone, with no LLM involvement.
+    """
+    import json
+    import re
+
+    from app.parsers.receipt import _enrich
+    from app.pdf_extraction import extract_pdf_text
+
+    if not receipts_ground_truth_path.exists():
+        return
+    truth = {
+        r["filename"]: r for r in json.loads(receipts_ground_truth_path.read_text())["receipts"]
+    }
+
+    def money(value):
+        if value is None:
+            return None
+        return round(float(re.sub(r"[^0-9.]", "", str(value)) or 0), 2)
+
+    mismatches = []
+    for pdf_path in sorted(receipts_dir.glob("*.pdf")):
+        expected = truth.get(pdf_path.name)
+        if not expected:
+            continue
+        result = {"fields": {}}
+        _enrich(result, extract_pdf_text(pdf_path.read_bytes()))
+        fields = result["fields"]
+        summary = expected["summary"]
+
+        checks = {
+            "subtotal": (money(fields.get("subtotal")), summary.get("subtotal")),
+            "total": (money(fields.get("total")), summary.get("total")),
+            "currency": (fields.get("currency"), expected.get("currency")),
+        }
+        if summary.get("taxes"):
+            checks["tax"] = (money(fields.get("tax")), summary["taxes"][0]["amount"])
+
+        for field, (got, want) in checks.items():
+            if want is not None and got != want:
+                mismatches.append((pdf_path.name, field, got, want))
+
+    assert not mismatches, f"deterministic extraction disagreed with ground truth: {mismatches}"
+
+
+def test_amounts_extract_across_currency_conventions():
+    """The extractor must work on any document, not just the test dataset.
+
+    Guards two silent-wrong-value bugs:
+    - Indian digit grouping is not in threes (1,41,760 is one lakh forty-one
+      thousand). A `(?:,\\d{3})*` pattern matched only the tail, so
+      "Rs 1,41,760.00" was extracted as "41,760.00" -- off by ~3.4x.
+    - Unknown currency symbols were dropped from the value entirely.
+    """
+    from app.regex_utils import extract_amounts
+
+    assert extract_amounts("Total 1,41,760.00") == ["1,41,760.00"]
+    assert extract_amounts("Total 1,234,567.89") == ["1,234,567.89"]
+    assert extract_amounts("Total EUR 99.00") == ["99.00"]
+    # Symbols are kept as part of the value, never invented or substituted.
+    for text, expected in (
+        ("Total 141.76", "141.76"),
+        ("Total 1,200.50", "1,200.50"),
+    ):
+        assert extract_amounts(text) == [expected]
+
+    # Quantities, years and reference numbers are not money.
+    assert extract_amounts("Qty 12 hrs") == []
+    assert extract_amounts("Invoice No 2026") == []
+
+
+def test_tax_rate_is_not_mistaken_for_tax_amount():
+    """Regression test: "Sales Tax 8.25%" yielded 8.25 as the tax amount
+    instead of the $82.50 printed beneath it.
+    """
+    from app.parsers.invoice import _enrich
+
+    result = {"fields": {}}
+    _enrich(result, "Subtotal\n$1,000.00\nSales Tax 8.25%\n$82.50\nBalance Due\n$1,082.50\n")
+    assert result["fields"]["tax"] == "$82.50"
+    assert result["fields"]["total"] == "$1,082.50"
+
+
+def test_currency_is_never_guessed_from_a_dollar_sign():
+    """"$" is shared by USD, CAD, AUD, SGD, HKD and others, so it carries no
+    information on its own -- guessing from it is what reported Canadian
+    documents as USD. With no other evidence the function returns None so
+    the caller leaves the existing value alone rather than inventing one.
+    """
+    from app.regex_utils import extract_currency
+
+    assert extract_currency("Subtotal $1,000.00\nSales Tax $82.50\nTotal $1,082.50") is None
+    # Unambiguous symbols and printed codes are still honoured.
+    assert extract_currency("Total 1,41,600.00 INR") == "INR"
+    assert extract_currency("Total 1,440.00 and VAT applied in GBP") == "GBP"

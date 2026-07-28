@@ -15,7 +15,14 @@ from typing import Any
 
 from app.json_utils import dedupe_strings
 from app.parsers.generic import parse_generic_document
-from app.regex_utils import extract_amounts, extract_dates, extract_labeled_amount, extract_labeled_value
+from app.regex_utils import (
+    extract_amounts,
+    extract_currency,
+    extract_dates,
+    extract_labeled_amount,
+    extract_labeled_amount_in_order,
+    extract_labeled_value,
+)
 
 _GUIDANCE = """
 INVOICE-SPECIFIC GUIDANCE:
@@ -35,8 +42,25 @@ _INVOICE_DATE_LABELS = (r"invoice\s*date", r"date\s*of\s*invoice", r"\bdate\b")
 _DUE_DATE_LABELS = (r"due\s*date", r"payment\s*due")
 _PO_NUMBER_LABELS = (r"purchase\s*order\s*(?:#|no\.?|number)?", r"\bpo\s*(?:#|no\.?|number)\b")
 _SUBTOTAL_LABELS = (r"sub\s*-?\s*total",)
-_TAX_LABELS = (r"tax(?:\s*\(\d+%?\))?", r"vat", r"gst")
-_TOTAL_LABELS = (r"total\s*due", r"amount\s*due", r"grand\s*total", r"balance\s*due", r"\btotal\b")
+# Named sales taxes from several jurisdictions, most specific first, so a
+# document's own tax label is matched rather than relying on the model.
+# Not tuned to any one country: CGST/SGST/IGST (India), HST/QST/PST
+# (Canada), GST (several), VAT (Europe and beyond), plus a generic "tax".
+_TAX_LABELS = (
+    r"cgst", r"sgst", r"igst", r"utgst",
+    r"hst", r"qst", r"pst", r"gst",
+    r"vat", r"sales\s*tax", r"tax(?:\s*\(\d+%?\))?",
+)
+# Priority order, honoured by extract_labeled_amount_in_order. A bare
+# "total" is listed last so a more specific balance/amount-due label wins
+# when the invoice prints both.
+_TOTAL_LABELS = (
+    r"balance\s*due",
+    r"amount\s*due",
+    r"total\s*due",
+    r"grand\s*total",
+    r"\btotal\b",
+)
 
 
 def _enrich(result: dict[str, Any], text: str) -> None:
@@ -58,17 +82,30 @@ def _enrich(result: dict[str, Any], text: str) -> None:
     if due_date and not fields.get("due_date"):
         fields["due_date"] = due_date
 
-    subtotal = extract_labeled_amount(text, _SUBTOTAL_LABELS)
-    if subtotal and not fields.get("subtotal"):
+    # Monetary fields prefer the deterministic value over the model's. A
+    # label->amount match is literal source text; the model was observed
+    # transposing digits (5350.00 for a printed 5530.00) and omitting
+    # amount_due entirely.
+    subtotal = extract_labeled_amount_in_order(text, _SUBTOTAL_LABELS)
+    if subtotal:
         fields["subtotal"] = subtotal
 
-    tax = extract_labeled_amount(text, _TAX_LABELS)
-    if tax and not fields.get("tax"):
+    tax = extract_labeled_amount_in_order(text, _TAX_LABELS)
+    if tax:
         fields["tax"] = tax
 
-    total = extract_labeled_amount(text, _TOTAL_LABELS)
-    if total and not (fields.get("total") or fields.get("amount_due")):
+    total = extract_labeled_amount_in_order(text, _TOTAL_LABELS)
+    if total:
         fields["total"] = total
+        if not fields.get("amount_due"):
+            fields["amount_due"] = total
+
+    # "$" alone is shared by many currencies and was consistently read as
+    # USD on Canadian invoices; a printed ISO code (or an HST/QST line) is
+    # unambiguous.
+    currency = extract_currency(text)
+    if currency:
+        fields["currency"] = currency
 
     # The model sometimes returns amounts/dates as numbers or mixed types
     # rather than the displayed string (e.g. 134.45 instead of "$134.45").

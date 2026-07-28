@@ -17,6 +17,7 @@ from __future__ import annotations
 import io
 import logging
 import re
+import statistics
 
 import fitz
 import pytesseract
@@ -111,6 +112,53 @@ _ROW_GAP_RATIO = 0.02
 _MAX_CUT_DEPTH = 8
 
 
+def _groups_are_row_aligned(groups: list[list[tuple]]) -> bool:
+    """True when a vertical split would cut a table apart row-wise.
+
+    A wide x-gap does not always mean "independent columns". A summary
+    table puts its labels in one x-band and its amounts in another:
+
+        Subtotal            $62.80
+        HST 13%              $2.34
+        Total CAD           $65.14
+
+    Those are two x-bands separated by a clean gap, so a naive column split
+    fires and emits every label followed by every amount. The label/amount
+    pairing then survives only as position, and one slip misreads the
+    subtotal as the line above it -- which is exactly what happened.
+
+    The distinguishing signal is row alignment. In a table, each band has
+    the same number of rows and they sit at the same y positions. In a
+    genuine multi-column layout the columns flow independently, so their
+    rows do not line up one-for-one. When the rows do align, the vertical
+    split is refused and the caller falls back to reading in row order,
+    which keeps each label next to its own value.
+    """
+    if len(groups) < 2:
+        return False
+    counts = [len(group) for group in groups]
+    if min(counts) < 2 or max(counts) - min(counts) > 1:
+        return False
+
+    def centers(group: list[tuple]) -> list[float]:
+        return sorted((block[1] + block[3]) / 2 for block in group)
+
+    heights = [block[3] - block[1] for group in groups for block in group]
+    tolerance = max(statistics.median(heights) * 0.6, 1.0) if heights else 1.0
+
+    reference = centers(max(groups, key=len))
+    for group in groups:
+        if group is max(groups, key=len):
+            continue
+        group_centers = centers(group)
+        aligned = sum(
+            1 for c in group_centers if any(abs(c - r) <= tolerance for r in reference)
+        )
+        if aligned / len(group_centers) < 0.8:
+            return False
+    return True
+
+
 def _xy_cut(blocks: list[tuple], page_width: float, page_height: float, depth: int) -> list[tuple]:
     """Recursive XY-cut: recover reading order for mixed-layout pages.
 
@@ -138,6 +186,10 @@ def _xy_cut(blocks: list[tuple], page_width: float, page_height: float, depth: i
         return sorted(blocks, key=lambda block: (block[1], block[0]))
 
     column_groups = _cut_groups(blocks, axis=0, min_gap=page_width * _COLUMN_GAP_RATIO)
+    if len(column_groups) > 1 and _groups_are_row_aligned(column_groups):
+        # A table, not independent columns -- read it in row order so each
+        # label stays next to its own value.
+        return sorted(blocks, key=lambda block: (block[1], block[0]))
     if len(column_groups) > 1:
         ordered: list[tuple] = []
         for group in sorted(column_groups, key=lambda g: min(b[0] for b in g)):

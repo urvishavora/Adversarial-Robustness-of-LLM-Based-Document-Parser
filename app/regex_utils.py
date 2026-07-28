@@ -12,6 +12,7 @@ when present, the LLM fills in everything else.
 from __future__ import annotations
 
 import re
+from collections import Counter
 from typing import NamedTuple
 
 from app.json_utils import dedupe_strings
@@ -28,10 +29,40 @@ _DATE_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Currency symbols, longest-first so "R$" is tried before a bare "$".
+# Deliberately not limited to $/EUR/GBP: an invoice may be issued in any
+# currency, and a symbol the pattern doesn't know gets silently dropped
+# from the extracted value.
+_CURRENCY_SYMBOL = r"(?:R\$|RM|Rs\.?|₹|[$€£¥₩₪₺฿₫₦₱]|CHF|kr)"
+
+# Digit grouping is not universally in threes. Indian numbering groups the
+# last three digits and then in twos -- 1,41,760.00 is one lakh forty-one
+# thousand. A `(?:,\d{3})*` pattern cannot match that, and because the
+# regex still matched the *tail*, "₹1,41,760.00" was extracted as
+# "41,760.00": a silently wrong number, off by a factor of ~3.4. Allowing
+# 2- or 3-digit groups covers both conventions.
+_GROUPED_NUMBER = r"\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?"
+_PLAIN_NUMBER = r"\d+(?:\.\d{1,2})?"
+# Same grouping, but decimals required -- used for amounts written without a
+# currency symbol, so quantities, years and reference numbers aren't
+# mistaken for money.
+_GROUPED_NUMBER_WITH_DECIMALS = r"\d{1,3}(?:,\d{2,3})*\.\d{2}"
+
+# The trailing (?!\d) guards against a partial match winning: without it,
+# the grouped-number branch matches the first three digits of "5000" and
+# stops, extracting "¥500". The guard forces backtracking to the branch
+# that consumes the whole number.
 _AMOUNT_PATTERN = re.compile(
-    r"(?<![\w.])"
-    r"[$€£]\s?\d{1,3}(?:,\d{3})*(?:\.\d{2})?"
-    r"|\b\d{1,3}(?:,\d{3})*\.\d{2}\b"
+    r"(?<![\w.])(?:"
+    # Symbol-prefixed: the symbol is part of the value, so it is captured
+    # rather than dropped.
+    + _CURRENCY_SYMBOL + r"\s?(?:" + _GROUPED_NUMBER + r"|" + _PLAIN_NUMBER + r")(?!\d)"
+    # A number with no currency symbol must not be followed by "%", or a tax
+    # *rate* gets captured as the tax *amount*: "Sales Tax 8.25%" yielded
+    # 8.25 instead of the $82.50 printed on the next line.
+    + r"|" + _GROUPED_NUMBER_WITH_DECIMALS + r"(?![\d%])"
+    + r"|\b\d+\.\d{2}\b(?!\s*%)"
+    + r")"
 )
 
 
@@ -64,6 +95,105 @@ def extract_labeled_value(
     candidate = match.group(1)[:max_chars].strip()
     candidate = re.split(r"\s{2,}|\t|\n", candidate, maxsplit=1)[0].strip(" :;,.|-_")
     return candidate or None
+
+
+# ISO 4217 codes that appear verbatim on documents ("Total CAD $65.14",
+# "Approved | CAD 65.14"). A printed code is unambiguous, unlike a bare "$"
+# which is shared by many currencies -- a Canadian receipt showing "$" was
+# repeatedly reported as USD.
+_CURRENCY_CODE_PATTERN = re.compile(
+    r"\b(CAD|USD|EUR|GBP|AUD|NZD|INR|JPY|CHF|SEK|NOK|DKK|MXN|BRL|ZAR|SGD|HKD|CNY|AED)\b"
+)
+
+
+# Symbols that map to exactly one currency. "$" is absent on purpose -- it
+# is shared by many currencies, so it carries no information on its own.
+_UNAMBIGUOUS_SYMBOLS = {
+    "₹": "INR",
+    "€": "EUR",
+    "£": "GBP",
+    "¥": "JPY",
+    "₩": "KRW",
+    "₪": "ILS",
+    "₺": "TRY",
+    "฿": "THB",
+    "₫": "VND",
+    "₦": "NGN",
+    "₱": "PHP",
+    "R$": "BRL",
+}
+
+# Sales taxes unique to a single country, which therefore identify the
+# currency when no code or unambiguous symbol is printed. Deliberately
+# excludes bare "GST" (Australia, India, Singapore, New Zealand, Canada all
+# use it) and "VAT" (used across Europe and beyond).
+_JURISDICTION_TAXES = (
+    (r"\b(HST|QST)\b", "CAD"),          # Harmonized / Quebec sales tax: Canada only
+    (r"\b(CGST|SGST|IGST|UTGST)\b", "INR"),  # India's split GST components
+)
+
+
+def extract_currency(text: str) -> str | None:
+    """Return the currency code printed on the document, if any.
+
+    Uses the most frequently occurring code rather than the first, so a
+    single stray mention doesn't outweigh the document's actual currency.
+    Returns None when no explicit code appears -- callers should leave the
+    existing value alone in that case rather than guessing from a symbol.
+    """
+    codes = _CURRENCY_CODE_PATTERN.findall(text.upper())
+    if codes:
+        return Counter(codes).most_common(1)[0][0]
+
+    # No printed code. Fall back to an unambiguous currency symbol -- one
+    # that maps to exactly one currency. "$" is deliberately excluded: it is
+    # shared by the US, Canada, Australia, Singapore, Hong Kong, Mexico and
+    # others, so guessing from it is how Canadian documents got reported as
+    # USD in the first place.
+    for symbol, code in _UNAMBIGUOUS_SYMBOLS.items():
+        if symbol in text:
+            return code
+
+    # Still nothing. A jurisdiction-specific tax name identifies the country,
+    # and therefore the currency, even when only "$" is printed. Only taxes
+    # unique to one country are listed: bare "GST" is excluded because it is
+    # also used in Australia, India, Singapore and New Zealand, and bare
+    # "VAT" is used across Europe and beyond.
+    for pattern, code in _JURISDICTION_TAXES:
+        if re.search(pattern, text, re.IGNORECASE):
+            return code
+
+    # No evidence. Returning None is deliberate -- callers leave the existing
+    # value untouched rather than defaulting to a currency the document never
+    # mentions.
+    return None
+
+
+def extract_labeled_amount_in_order(text: str, label_patterns: tuple[str, ...]) -> str | None:
+    """Like `extract_labeled_amount`, but honours label priority.
+
+    `extract_labeled_amount` ORs every label into one alternation, so it
+    returns whichever label happens to appear *earliest in the document*,
+    regardless of the order they were listed in. That silently defeats the
+    intent of an ordered tuple. On a restaurant bill printing both
+
+        Total CAD          $151.93
+        Tip                 $20.00
+        Final amount CAD   $171.93
+
+    the alternation matches "Total" first and reports the pre-tip amount as
+    the total. Trying patterns in the given order instead lets a caller say
+    "prefer 'final amount' over a bare 'total'".
+    """
+    for pattern in label_patterns:
+        match = re.search(rf"(?im)\b(?:{pattern})\b.{{0,40}}", text)
+        if not match:
+            continue
+        window = text[match.start() : match.end() + 40]
+        amount_match = _AMOUNT_PATTERN.search(window)
+        if amount_match:
+            return amount_match.group(0)
+    return None
 
 
 def extract_labeled_amount(text: str, label_patterns: tuple[str, ...]) -> str | None:
