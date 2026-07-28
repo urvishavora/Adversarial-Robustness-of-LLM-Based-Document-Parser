@@ -10,6 +10,21 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+# Load a .env file sitting next to the project root, if present.
+#
+# Without this, `os.getenv` below only sees variables already exported in the
+# shell -- so a .env file created by following the README was read by nothing
+# and every setting silently stayed at its default. Real environment
+# variables still win over the file (override=False), so an explicit
+# `set MODEL_NAME=...` in the shell continues to take precedence.
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(_PROJECT_ROOT / ".env", override=False)
+except ImportError:  # pragma: no cover - dotenv is a declared dependency
+    pass
+
 
 def _bool_env(name: str, default: bool) -> bool:
     raw = os.getenv(name)
