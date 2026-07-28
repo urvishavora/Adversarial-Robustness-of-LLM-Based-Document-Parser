@@ -161,3 +161,69 @@ def test_handwriting_flag_controls_vision_pass():
 
     assert upload({"handwriting": "false"}) is False, "handwriting=false must skip the vision pass"
     assert upload({"handwriting": "true"}) is True, "handwriting=true must run the vision pass"
+
+
+def test_vision_model_override_and_text_model_release():
+    """The vision model must be selectable per request, and the text model
+    must be unloaded first.
+
+    Both models are held resident by keep_alive (text 10m, vision 15m), so
+    after parsing the document the ~5 GB text model is still occupying
+    memory when the ~8 GB vision model tries to load. On a machine that
+    cannot hold both, that load fails within seconds -- which is exactly
+    the observed symptom. Freeing the text model first is what makes the
+    vision pass viable on constrained hardware.
+    """
+    from unittest.mock import patch
+
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+    from tests.fixtures.synthetic_pdfs import make_application_form_pdf
+
+    client = TestClient(app)
+    model_output = {"document_type": "Form", "summary": None, "fields": {"application_id": "X"}}
+
+    with patch("app.parsers.generic.call_ollama", return_value=model_output), patch(
+        "app.parsers.handwriting.call_ollama_vision"
+    ) as vision, patch("app.main.release_model") as release:
+        vision.return_value = {"entries": [{"field": "Name", "value": "John Mason", "confidence": 0.9}]}
+        response = client.post(
+            "/upload",
+            files={"file": ("form.pdf", make_application_form_pdf(), "application/pdf")},
+            data={"handwriting": "true", "vision_model": "granite3.2-vision"},
+        )
+
+    assert response.status_code == 200
+    assert vision.call_args.kwargs.get("model") == "granite3.2-vision"
+    assert release.called, "the text model must be released before the vision pass"
+
+    handwritten = response.json()["parsed_output"]["fields"]["handwritten_fields"]
+    assert handwritten["vision_model"] == "granite3.2-vision"
+    assert handwritten["entries"][0]["value"] == "John Mason"
+
+
+def test_vision_failure_surfaces_page_errors():
+    """A total vision failure previously looked identical to a page with no
+    handwriting -- a schema full of nulls -- because page_errors was dropped
+    when mapping into the stable schema. The underlying exception is the
+    only way to tell "model missing" from "out of memory", so it must reach
+    the caller.
+    """
+    from app.parsers.handwriting import _map_handwriting_entries
+
+    failed = {
+        "entries": [],
+        "confidence": 0.0,
+        "review_required": True,
+        "source": "ollama_vision",
+        "error": "handwriting_extraction_unavailable",
+        "error_detail": "Vision extraction failed for every rendered page.",
+        "vision_model": "llama3.2-vision",
+        "pages_failed": 1,
+        "page_errors": [{"page": 1, "error": "LLMBackendError", "detail": "500 Server Error"}],
+    }
+    mapped = _map_handwriting_entries(failed)
+    assert mapped["error"] == "handwriting_extraction_unavailable"
+    assert mapped["pages_failed"] == 1
+    assert mapped["page_errors"][0]["detail"] == "500 Server Error"

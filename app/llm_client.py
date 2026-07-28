@@ -86,7 +86,33 @@ def call_ollama(prompt: str, *, max_retries: int | None = None, num_predict: int
     raise last_exc
 
 
-def call_ollama_vision(image_base64: str, prompt: str) -> dict[str, Any]:
+def release_model(model_name: str) -> None:
+    """Ask Ollama to unload a model from memory immediately.
+
+    The text and vision models are both held resident by `keep_alive`
+    (10 and 15 minutes), so after parsing a document the ~5 GB text model
+    is still loaded when the vision model tries to load alongside it. On a
+    machine that cannot hold both, that load fails immediately -- which
+    matches the observed symptom exactly: every page failing within
+    seconds rather than timing out.
+
+    Ollama unloads a model when sent keep_alive=0, so the vision pass can
+    reclaim that memory first. Best-effort: a failure here is logged and
+    ignored, because being unable to free memory should never be the thing
+    that fails the request.
+    """
+    try:
+        requests.post(
+            config.OLLAMA_URL,
+            json={"model": model_name, "prompt": "", "keep_alive": 0, "stream": False},
+            timeout=30,
+        )
+        logger.info("Requested unload of model %s to free memory", model_name)
+    except requests.RequestException as exc:  # pragma: no cover - best effort
+        logger.warning("Could not unload model %s: %s", model_name, exc)
+
+
+def call_ollama_vision(image_base64: str, prompt: str, *, model: str | None = None) -> dict[str, Any]:
     """Call the chat/vision endpoint with one image, streaming the response.
 
     Streaming (rather than `stream=False`) avoids a false read-timeout while
@@ -94,7 +120,7 @@ def call_ollama_vision(image_base64: str, prompt: str) -> dict[str, Any]:
     socket's read timer, and the text chunks are joined before JSON parsing.
     """
     request_payload = {
-        "model": config.VISION_MODEL_NAME,
+        "model": model or config.VISION_MODEL_NAME,
         "stream": True,
         "format": "json",
         "keep_alive": "15m",

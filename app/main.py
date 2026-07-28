@@ -20,7 +20,7 @@ from fastapi import Form as FormField
 from app import config
 from app.document_service import GROUND_TRUTH_RESUMES, parse_document
 from app.errors import DocumentParserError
-from app.llm_client import get_installed_ollama_models, normalize_ollama_model_name
+from app.llm_client import get_installed_ollama_models, normalize_ollama_model_name, release_model
 from app.parsers.handwriting import extract_handwritten_application_fields, merge_handwritten_fields
 from app.pdf_extraction import extract_pdf_text
 
@@ -73,6 +73,7 @@ def health_check() -> dict[str, Any]:
 async def upload_pdf(
     file: UploadFile = File(...),
     handwriting: bool | None = FormField(None),
+    vision_model: str | None = FormField(None),
 ) -> dict[str, Any]:
     """Parse one PDF.
 
@@ -121,7 +122,14 @@ async def upload_pdf(
         use_handwriting = config.ENABLE_HANDWRITING if handwriting is None else handwriting
         if predicted_type == "Form" and use_handwriting:
             handwriting_start = time.perf_counter()
-            handwriting = extract_handwritten_application_fields(file_bytes)
+            # The text model is held resident by keep_alive, so it is still
+            # occupying memory when the vision model tries to load. On a
+            # machine that cannot hold both, that load fails instantly.
+            # Freeing it first is what makes the vision pass viable.
+            release_model(config.MODEL_NAME)
+            handwriting = extract_handwritten_application_fields(
+                file_bytes, model=vision_model
+            )
             merge_handwritten_fields(parsed_output, handwriting)
             handwriting_seconds = time.perf_counter() - handwriting_start
     except DocumentParserError as exc:

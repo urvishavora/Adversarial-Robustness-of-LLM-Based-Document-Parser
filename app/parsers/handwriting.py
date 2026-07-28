@@ -165,8 +165,15 @@ def _merge_handwriting_page_results(results: list[dict[str, Any]]) -> dict[str, 
     return merged
 
 
-def extract_handwritten_application_fields(file_bytes: bytes) -> dict[str, Any]:
-    """Extract handwritten entries page by page using a compact generic schema."""
+def extract_handwritten_application_fields(
+    file_bytes: bytes, *, model: str | None = None
+) -> dict[str, Any]:
+    """Extract handwritten entries page by page using a compact generic schema.
+
+    `model` overrides VISION_MODEL_NAME for this call, so a smaller vision
+    model can be used on a memory-constrained machine without restarting
+    the server or editing configuration.
+    """
     images = render_pages_as_jpeg_base64(file_bytes)
 
     if not images:
@@ -175,7 +182,7 @@ def extract_handwritten_application_fields(file_bytes: bytes) -> dict[str, Any]:
             {
                 "error": "no_rendered_pages",
                 "error_detail": "The PDF did not produce any renderable pages.",
-                "vision_model": config.VISION_MODEL_NAME,
+                "vision_model": model or config.VISION_MODEL_NAME,
             }
         )
         return result
@@ -185,7 +192,7 @@ def extract_handwritten_application_fields(file_bytes: bytes) -> dict[str, Any]:
 
     for page_number, image_base64 in enumerate(images, start=1):
         try:
-            raw_result = call_ollama_vision(image_base64, _HANDWRITING_PROMPT)
+            raw_result = call_ollama_vision(image_base64, _HANDWRITING_PROMPT, model=model)
             page_result = _clean_handwriting_result(raw_result)
             entries = page_result.get("entries")
             if isinstance(entries, list):
@@ -204,13 +211,13 @@ def extract_handwritten_application_fields(file_bytes: bytes) -> dict[str, Any]:
                 "error": "handwriting_extraction_unavailable",
                 "error_detail": "Vision extraction failed for every rendered page.",
                 "page_errors": page_errors,
-                "vision_model": config.VISION_MODEL_NAME,
+                "vision_model": model or config.VISION_MODEL_NAME,
             }
         )
         return result
 
     result = _merge_handwriting_page_results(page_results)
-    result["vision_model"] = config.VISION_MODEL_NAME
+    result["vision_model"] = model or config.VISION_MODEL_NAME
     result["pages_processed"] = len(page_results)
     result["pages_failed"] = len(page_errors)
     if page_errors:
@@ -400,7 +407,20 @@ def _map_handwriting_entries(handwriting: dict[str, Any]) -> dict[str, Any]:
     if mapped["review_required"]:
         mapped["signature_name"] = None
 
-    for metadata_key in ("vision_model", "error", "error_detail"):
+    # Carry diagnostics through. `page_errors` and `pages_failed` were
+    # previously dropped here, which made a vision failure indistinguishable
+    # from a page that genuinely had no handwriting: both surfaced as a
+    # schema full of nulls. The per-page exception type and message are the
+    # only way to tell "model not installed" from "out of memory" from
+    # "request timed out", so they must reach the caller.
+    for metadata_key in (
+        "vision_model",
+        "error",
+        "error_detail",
+        "page_errors",
+        "pages_processed",
+        "pages_failed",
+    ):
         if metadata_key in handwriting:
             mapped[metadata_key] = handwriting[metadata_key]
 
