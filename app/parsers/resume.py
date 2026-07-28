@@ -393,6 +393,49 @@ def _recover_leaked_list_content(result: dict[str, Any]) -> list[str]:
     return warnings
 
 
+# A date range printed as one string carries both endpoints; the model
+# returns the range but usually leaves start_date/end_date null. Splitting
+# it is arithmetic on the string the model already produced, so it needs no
+# second model call and cannot introduce a value the document didn't show.
+# Handles hyphen, en dash, em dash, "to", and an open-ended "Present".
+_DATE_RANGE_SEPARATOR = re.compile(r"\s*(?:--|-|–|—|to|until|through)\s*", re.IGNORECASE)
+
+
+def split_date_range(value: Any) -> tuple[str | None, str | None]:
+    """Return (start, end) for a printed range, or (None, None) if not one."""
+    text = str(value or "").strip()
+    if not text:
+        return None, None
+    parts = [p.strip(" ,;") for p in _DATE_RANGE_SEPARATOR.split(text) if p.strip(" ,;")]
+    if len(parts) != 2:
+        return None, None
+    start, end = parts
+    # Guard against splitting a single hyphenated token ("2020-21" is a range,
+    # but "Jan" alone is not) -- both sides must look like a date fragment.
+    if not any(ch.isdigit() for ch in start):
+        return None, None
+    if not (any(ch.isdigit() for ch in end) or end.casefold() in {"present", "current", "now", "date"}):
+        return None, None
+    return start, end
+
+
+def _fill_date_endpoints(entries: Any) -> None:
+    """Populate start_date/end_date from a combined date range, in place."""
+    if not isinstance(entries, list):
+        return
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        combined = entry.get("date") or entry.get("dates") or entry.get("duration")
+        if not combined:
+            continue
+        start, end = split_date_range(combined)
+        if start and not entry.get("start_date"):
+            entry["start_date"] = start
+        if end and not entry.get("end_date"):
+            entry["end_date"] = end
+
+
 def normalize_resume(parsed: dict[str, Any], filename: str) -> dict[str, Any]:
     result = deep_copy_json(EMPTY_RESUME)
     result["file_name"] = filename
@@ -432,6 +475,9 @@ def normalize_resume(parsed: dict[str, Any], filename: str) -> dict[str, Any]:
 
     leak_warnings = _recover_leaked_list_content(result)
     result["data_quality_warnings"] = leak_warnings + _collect_placeholder_warnings(result)
+
+    _fill_date_endpoints(result.get("education"))
+    _fill_date_endpoints(result.get("experience"))
 
     return result
 

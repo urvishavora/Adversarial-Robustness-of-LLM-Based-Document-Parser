@@ -199,3 +199,58 @@ def test_select_resume_examples_excludes_self_by_filename():
     ]
     examples = select_resume_examples("python engineer", "self.pdf", ground_truth, limit=2)
     assert all(example.get("file_name") != "self.pdf" for example in examples)
+
+
+def test_split_date_range_derives_endpoints():
+    """A printed range carries both endpoints, but the model returns the
+    combined string and leaves start_date/end_date null. Splitting it is
+    arithmetic on a value the model already produced -- no second model
+    call, and it cannot introduce a value the document didn't show.
+    """
+    from app.parsers.resume import split_date_range
+
+    assert split_date_range("2020 - 2023") == ("2020", "2023")
+    assert split_date_range("2020 – 2023") == ("2020", "2023")  # en dash
+    assert split_date_range("2017- 2019") == ("2017", "2019")
+    assert split_date_range("Oct 2023 - Present") == ("Oct 2023", "Present")
+    assert split_date_range("Jan 2022 to Aug 2023") == ("Jan 2022", "Aug 2023")
+
+    # Not ranges -- must not invent endpoints.
+    assert split_date_range("2020") == (None, None)
+    assert split_date_range("Bachelor of Arts") == (None, None)
+    assert split_date_range(None) == (None, None)
+
+
+def test_date_endpoints_never_overwrite_model_values():
+    from app.parsers.resume import _fill_date_endpoints
+
+    entries = [
+        {"date": "2020 - 2023"},
+        {"date": "2016 - 2020", "start_date": "FROM MODEL"},
+    ]
+    _fill_date_endpoints(entries)
+    assert entries[0]["start_date"] == "2020"
+    assert entries[0]["end_date"] == "2023"
+    assert entries[1]["start_date"] == "FROM MODEL"
+    assert entries[1]["end_date"] == "2020"
+
+
+def test_address_graded_on_content_not_punctuation():
+    """Three correctly-extracted addresses scored 0% because grading used
+    exact string equality: the document prints "43-589 BEECHWOOD DR
+    WATERLOO ON N2T 2K9" and the ground truth writes it with commas and
+    mixed case. That measures transcription style, not extraction.
+    """
+    from app.accuracy import score_resume
+
+    expected = {
+        "file_name": "x.pdf",
+        "contact": {"address": "43-589 Beechwood Dr, Waterloo, ON N2T 2K9"},
+    }
+    predicted = {"contact": {"address": "43-589 BEECHWOOD DR  WATERLOO ON N2T 2K9"}}
+    _, per_field = score_resume(expected, predicted)
+    assert per_field["contact.address"] == 1.0
+
+    # A genuinely different address must still score 0.
+    _, wrong = score_resume(expected, {"contact": {"address": "12 Other Street, Ottawa"}})
+    assert wrong["contact.address"] == 0.0

@@ -10,7 +10,9 @@ reproducible and improvable over time -- treat the resulting percentage as
 
 Scoring approach, per resume:
 - Scalar fields (name.*, job_title, contact.*) score 1.0 on an exact
-  case/whitespace-insensitive match, else 0.0.
+  case/whitespace-insensitive match, else 0.0. contact.address and URL
+  fields are compared on alphanumerics only, since commas, case and line
+  breaks are transcription style rather than a difference in the value.
 - summary scores on token-overlap similarity (0..1), since minor
   whitespace/punctuation differences shouldn't zero out an otherwise-correct
   summary.
@@ -43,10 +45,26 @@ def _normalize_text(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value)).strip().casefold()
 
 
-def _scalar_match(expected: Any, predicted: Any) -> float | None:
+def _normalize_loosely(value: Any) -> str:
+    """Compare on content, ignoring formatting the document didn't fix.
+
+    Postal addresses and URLs are the same value whether written
+    "43-589 Beechwood Dr, Waterloo, ON N2T 2K9" or
+    "43-589 BEECHWOOD DR  WATERLOO ON N2T 2K9" -- case, commas, line breaks
+    and a trailing "?" on a URL carry no information. Grading those by exact
+    string equality reported three correctly-extracted addresses as 0%,
+    which measures transcription style rather than whether the field was
+    found.
+    """
+    return re.sub(r"[^a-z0-9]+", "", str(value).casefold())
+
+
+def _scalar_match(expected: Any, predicted: Any, *, loose: bool = False) -> float | None:
     """Returns None when there's nothing to grade (expected is empty)."""
     if expected in (None, ""):
         return None
+    if loose:
+        return 1.0 if _normalize_loosely(expected) == _normalize_loosely(predicted) else 0.0
     return 1.0 if _normalize_text(expected) == _normalize_text(predicted) else 0.0
 
 
@@ -130,8 +148,14 @@ def score_resume(expected: dict[str, Any], predicted: dict[str, Any]) -> tuple[f
 
     expected_contact = expected.get("contact", {}) if isinstance(expected.get("contact"), dict) else {}
     predicted_contact = predicted.get("contact", {}) if isinstance(predicted.get("contact"), dict) else {}
+    # address and URLs are graded loosely: punctuation, case and line breaks
+    # differ between how a document prints them and how they are transcribed,
+    # and none of that changes whether the field was correctly found.
+    _LOOSE_CONTACT = {"address", "linkedin", "website", "portfolio"}
     for sub in ("phone", "email", "address", "linkedin"):
-        result = _scalar_match(expected_contact.get(sub), predicted_contact.get(sub))
+        result = _scalar_match(
+            expected_contact.get(sub), predicted_contact.get(sub), loose=sub in _LOOSE_CONTACT
+        )
         if result is not None:
             scores[f"contact.{sub}"] = result
 
