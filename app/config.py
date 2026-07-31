@@ -76,6 +76,18 @@ REQUEST_TIMEOUT_SECONDS = int(os.getenv("REQUEST_TIMEOUT_SECONDS", "480"))
 # MAX_PROMPT_CHARACTERS/4 + num_predict, because Ollama silently truncates
 # the prompt to fit, which loses document content rather than erroring.
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "16384"))
+
+# What to do when a PDF trips a security finding.
+#   "warn"  (default) -- refuse only files carrying executable/auto-run
+#           content, which nothing legitimate needs. Hidden text is
+#           quarantined out of the prompt and reported, but the visible
+#           document is still parsed, because it is usually a genuine
+#           document someone tampered with and the user still needs its data.
+#   "block" -- also refuse anything graded "high" or worse, e.g. a document
+#           carrying concealed instructions. Stricter, and will occasionally
+#           reject a document whose invisible text is an authoring artifact
+#           rather than an attack.
+SECURITY_MODE = os.getenv("SECURITY_MODE", "warn").strip().lower()
 OLLAMA_MAX_RETRIES = int(os.getenv("OLLAMA_MAX_RETRIES", "2"))
 ENABLE_REPAIR_PASS = _bool_env("ENABLE_REPAIR_PASS", True)
 

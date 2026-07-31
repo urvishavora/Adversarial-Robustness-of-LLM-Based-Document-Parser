@@ -23,6 +23,7 @@ from app.errors import DocumentParserError
 from app.llm_client import get_installed_ollama_models, normalize_ollama_model_name, release_model
 from app.parsers.handwriting import extract_handwritten_application_fields, merge_handwritten_fields
 from app.pdf_extraction import extract_pdf_text
+from app.security import scan_pdf, strip_hidden_text
 
 app = FastAPI(
     title="Modular Document Parser",
@@ -114,6 +115,29 @@ async def upload_pdf(
         extracted_text = extract_pdf_text(file_bytes)
         extraction_seconds = time.perf_counter() - extraction_start
 
+        # Security scan runs before any model call, so a concealed
+        # instruction never reaches the prompt in the first place --
+        # detecting an injection and then handing it to the model would be
+        # worse than not detecting it.
+        security = scan_pdf(file_bytes, extracted_text)
+        if not security["safe_to_parse"]:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "This PDF carries active content and was not parsed.",
+                    "security": security,
+                },
+            )
+        if config.SECURITY_MODE == "block" and security["severity"] in ("high", "critical"):
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "message": "This PDF was rejected by the configured security policy.",
+                    "security": security,
+                },
+            )
+        extracted_text = strip_hidden_text(extracted_text, security["hidden_text_snippets"])
+
         parsing_start = time.perf_counter()
         predicted_type, parsed_output, validation_issues = parse_document(extracted_text, filename)
         parsing_seconds = time.perf_counter() - parsing_start
@@ -140,6 +164,7 @@ async def upload_pdf(
         "file_size_bytes": len(file_bytes),
         "text_length": len(extracted_text),
         "predicted_document_type": predicted_type,
+        "security": security,
         "parsed_output": parsed_output,
         "validation_issues": validation_issues,
         "performance": {
