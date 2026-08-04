@@ -199,3 +199,68 @@ def test_scanning_many_documents_does_not_destabilise_the_process(resumes_dir, r
             scan_pdf(pdf_path.read_bytes(), "")
             scanned += 1
     assert scanned > 0
+
+
+def test_layout_flow_bait_is_detected():
+    """Layout-manipulation attacks reflow a page and reinforce it with
+    column-navigation directives. A genuine document references *pages*
+    ("continued on page 4"), not screen directions, because "right column"
+    has no stable meaning once a page is reflowed.
+    """
+    from app.security import scan_layout_bait
+
+    for bait in (
+        "EDUCATION continued on right",
+        "SKILLS -> SEE TOP-RIGHT COLUMN",
+        "EXPERIENCE continued from left",
+        "refer to the bottom-left panel",
+    ):
+        assert scan_layout_bait(bait), f"should flag {bait!r}"
+
+    for benign in (
+        "Table continued on the next page",
+        "Continued on page 4",
+        "lives on the left bank of the river",
+        "Signature on the right side of the form",
+    ):
+        assert not scan_layout_bait(benign), f"should not flag {benign!r}"
+
+
+def test_totals_arithmetic_catches_tampering_without_recognising_the_technique():
+    """The strongest defence against monetary tampering, because it does not
+    depend on spotting *how* the document was manipulated.
+
+    One sample attack simply deleted the word "Total" from "Total CAD", so
+    the label stopped matching and extraction picked up a different figure
+    -- reporting 55.80 on a receipt that totalled 60.79. No phrase matching
+    catches that; the arithmetic does.
+    """
+    from app.regex_utils import check_totals_consistency
+
+    tampered = {"subtotal": "$53.80", "tax": "$6.99", "total": "$55.80"}
+    message = check_totals_consistency(tampered)
+    assert message and "60.79" in message and "55.80" in message
+
+    # Correct receipts stay silent, including with a tip or a discount.
+    assert check_totals_consistency({"subtotal": "$53.80", "tax": "$6.99", "total": "$60.79"}) is None
+    assert check_totals_consistency(
+        {"subtotal": "$134.45", "tax": "$17.48", "tip": "$20.00", "total": "$171.93"}
+    ) is None
+    assert check_totals_consistency(
+        {"subtotal": "$100.00", "tax": "$13.00", "discount": "$10.00", "total": "$103.00"}
+    ) is None
+    # Not enough information to judge -> no warning rather than a false alarm.
+    assert check_totals_consistency({"total": "$60.79"}) is None
+
+
+def test_totals_check_is_silent_on_every_clean_receipt(receipts_dir):
+    from app.parsers.receipt import _enrich
+    from app.pdf_extraction import extract_pdf_text
+
+    noisy = []
+    for pdf_path in sorted(receipts_dir.glob("*.pdf")):
+        result = {"fields": {}}
+        _enrich(result, extract_pdf_text(pdf_path.read_bytes()))
+        if result.get("data_quality_warnings"):
+            noisy.append((pdf_path.name, result["data_quality_warnings"]))
+    assert not noisy, f"arithmetic check fired on clean receipts: {noisy}"

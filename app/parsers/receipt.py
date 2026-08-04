@@ -21,6 +21,7 @@ from app.regex_utils import (
     extract_labeled_amount,
     extract_labeled_amount_in_order,
     extract_labeled_value,
+    check_totals_consistency,
 )
 
 _GUIDANCE = """
@@ -146,6 +147,15 @@ def _enrich(result: dict[str, Any], text: str) -> None:
     # rather than the displayed string (e.g. 134.45 instead of "$134.45").
     # dedupe_strings coerces everything to a comparable string before
     # deduplicating, which also avoids a set/sort TypeError on mixed types.
+    # Arithmetic cross-check. Catches tampering with monetary values
+    # regardless of the technique used, including a deleted label that
+    # silently redirects extraction to the wrong figure.
+    discrepancy = check_totals_consistency(fields)
+    if discrepancy:
+        warnings = result.setdefault("data_quality_warnings", [])
+        if isinstance(warnings, list):
+            warnings.append(discrepancy)
+
     result["dates"] = dedupe_strings([*result.get("dates", []), *extract_dates(text)])
     result["amounts"] = dedupe_strings([*result.get("amounts", []), *extract_amounts(text)])
 

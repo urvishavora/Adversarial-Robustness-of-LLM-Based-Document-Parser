@@ -385,7 +385,10 @@ def scan_pdf(file_bytes: bytes, visible_text: str = "") -> dict[str, Any]:
     injection = scan_injection_phrases(truly_visible, hidden_text)
 
     confusable = scan_confusable_text(truly_visible)
-    findings = active + hidden_findings + injection + confusable + annotation_findings
+    layout_bait = scan_layout_bait(truly_visible)
+    findings = (
+        active + hidden_findings + injection + confusable + annotation_findings + layout_bait
+    )
     severity = "none"
     for finding in findings:
         severity = _worst(severity, finding.get("severity", "info"))
@@ -405,6 +408,7 @@ def scan_pdf(file_bytes: bytes, visible_text: str = "") -> dict[str, Any]:
             "prompt_injection": len(injection),
             "confusable_text": len(confusable),
             "annotations": len(annotation_findings),
+            "layout_bait": len(layout_bait),
         },
     }
 
@@ -582,4 +586,75 @@ def scan_annotations(file_bytes: bytes) -> list[dict[str, Any]]:
     finally:
         document.close()
 
+    return findings
+
+
+# --- Layout flow-control bait -------------------------------------------------
+#
+# Layout-manipulation attacks reflow a page so an extractor walks it in the
+# wrong order, and reinforce that with text telling the reader where to go
+# next -- "continued on right", "SEE TOP-RIGHT COLUMN", "continued from
+# left". A genuine document has no reason to carry column-navigation
+# directives in its body: real continuation notes reference *pages*
+# ("continued on page 4"), not columns or screen directions, because a
+# printed page has no stable notion of "right column" once it is reflowed.
+#
+# Built from position words plus continuation verbs rather than from any
+# specific observed phrase, so rewording it does not automatically evade
+# the check. It is still text matching, so a determined attacker can
+# rephrase around it -- this is graded "medium" and treated as a signal to
+# review, never as proof.
+_POSITION_BASE = r"(?:left|right|top|bottom|upper|lower|above|below|opposite|adjacent)"
+# Compound directions are the norm in this bait ("top-right column",
+# "bottom-left panel"), so a single position word is not enough to match.
+_POSITION_WORD = rf"{_POSITION_BASE}(?:[\s-]+{_POSITION_BASE})?"
+_LAYOUT_UNIT = r"(?:column|col\.?|panel|side|block|section|box)"
+
+_FLOW_BAIT_PATTERNS = (
+    # "continued on/from the right column", "continues in the top-right panel"
+    rf"continu(?:ed|es|ation)\s+(?:on|from|in|to)\s+(?:the\s+)?{_POSITION_WORD}",
+    # "see top-right column", "refer to the left panel"
+    rf"(?:see|refer\s+to|go\s+to|read)\s+(?:the\s+)?{_POSITION_WORD}[\s-]*{_LAYOUT_UNIT}",
+    # "-> SEE TOP-RIGHT COLUMN" style arrows pointing at a layout region
+    rf"(?:->|=>|>>)\s*(?:see\s+)?{_POSITION_WORD}[\s-]*{_LAYOUT_UNIT}",
+    # bare "<section> continued on right"
+    rf"continued\s+(?:on|in)\s+{_POSITION_WORD}\b",
+)
+_FLOW_BAIT_RE = re.compile("|".join(_FLOW_BAIT_PATTERNS), re.IGNORECASE)
+
+# Legitimate continuation notes point at pages, not screen directions.
+_LEGITIMATE_CONTINUATION_RE = re.compile(
+    r"continu(?:ed|es)\s+(?:on|from)\s+(?:the\s+)?(?:next\s+|previous\s+|following\s+)?page",
+    re.IGNORECASE,
+)
+
+
+def scan_layout_bait(text: str) -> list[dict[str, Any]]:
+    """Flag column-navigation directives embedded in extracted text."""
+    findings: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for match in _FLOW_BAIT_RE.finditer(text or ""):
+        phrase = match.group(0).strip()
+        window_start = max(0, match.start() - 40)
+        window = text[window_start : match.end() + 40]
+        if _LEGITIMATE_CONTINUATION_RE.search(window):
+            continue  # "continued on the next page" is ordinary
+        key = phrase.casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        findings.append(
+            {
+                "type": "layout_flow_bait",
+                "severity": "medium",
+                "detail": (
+                    "Text contains a column-navigation directive, which is "
+                    "characteristic of a document reflowed to mislead an "
+                    "extractor about reading order."
+                ),
+                "text_preview": phrase[:120],
+            }
+        )
+        if len(findings) >= 10:
+            break
     return findings

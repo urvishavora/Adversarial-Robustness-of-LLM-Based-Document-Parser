@@ -224,3 +224,57 @@ def extract_labeled_amount(text: str, label_patterns: tuple[str, ...]) -> str | 
     window = text[match.start() : match.end() + 40]
     amount_match = _AMOUNT_PATTERN.search(window)
     return amount_match.group(0) if amount_match else None
+
+
+def _money_to_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    cleaned = re.sub(r"[^0-9.\-]", "", str(value))
+    if not cleaned or cleaned in {"-", "."}:
+        return None
+    try:
+        return round(float(cleaned), 2)
+    except ValueError:
+        return None
+
+
+# Rounding on a printed receipt is to the cent; a couple of cents of slack
+# absorbs legitimate rounding without hiding a real discrepancy.
+_TOTAL_TOLERANCE = 0.05
+
+
+def check_totals_consistency(fields: dict[str, Any]) -> str | None:
+    """Verify that subtotal + tax (+ tip) reconciles to the stated total.
+
+    This is the strongest available defence against tampering with money,
+    because it does not depend on recognising *how* the document was
+    manipulated. One sample attack simply deleted the word "Total" from the
+    line "Total CAD", so the label no longer matched and extraction picked
+    up a different figure -- reporting $55.80 on a receipt that actually
+    totalled $60.79. No amount of phrase matching catches that, but the
+    arithmetic does: 53.80 + 6.99 does not equal 55.80.
+
+    Returns a description of the discrepancy, or None when the figures
+    reconcile or there is not enough information to judge.
+    """
+    subtotal = _money_to_float(fields.get("subtotal"))
+    total = _money_to_float(fields.get("total") or fields.get("amount_due"))
+    if subtotal is None or total is None:
+        return None
+
+    tax = _money_to_float(fields.get("tax")) or 0.0
+    tip = _money_to_float(fields.get("tip") or fields.get("tip/gratuity")) or 0.0
+    discount = _money_to_float(fields.get("discount")) or 0.0
+
+    expected = round(subtotal + tax + tip - abs(discount), 2)
+    if abs(expected - total) <= _TOTAL_TOLERANCE:
+        return None
+
+    # A discount the parser didn't capture would also explain a total lower
+    # than the sum, so say what was compared rather than asserting fraud.
+    return (
+        f"Totals do not reconcile: subtotal {subtotal:.2f} + tax {tax:.2f}"
+        + (f" + tip {tip:.2f}" if tip else "")
+        + (f" - discount {abs(discount):.2f}" if discount else "")
+        + f" = {expected:.2f}, but the extracted total is {total:.2f}."
+    )
