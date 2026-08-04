@@ -444,3 +444,30 @@ def test_report_sections_recovered_deterministically():
     combined = " ".join(s["text"] for s in sections)
     assert "sharp burr" in combined
     assert "quarantined 1,920 pieces" in combined
+
+
+def test_totals_check_accepts_either_discount_convention():
+    """Regression test: documents disagree on whether the printed subtotal is
+    already net of a discount.
+
+    On the sample receipts it is -- 53.80 + 6.99 reconciles exactly to 60.79
+    while a 2.00 discount is also listed, so subtracting it again
+    double-counts. Assuming one convention flagged 6 of 10 *clean* receipts.
+    A check that fires on the majority of legitimate documents is worse than
+    no check at all.
+    """
+    from app.regex_utils import check_totals_consistency
+
+    # Subtotal already net of the listed discount -> reconciles, stay silent.
+    assert check_totals_consistency(
+        {"subtotal": "$53.80", "tax": "$6.99", "discount": "$2.00", "total": "$60.79"}
+    ) is None
+    # Discount applied after the subtotal -> also reconciles.
+    assert check_totals_consistency(
+        {"subtotal": "$100.00", "tax": "$13.00", "discount": "$10.00", "total": "$103.00"}
+    ) is None
+    # Neither reading works -> genuine discrepancy, still reported.
+    message = check_totals_consistency(
+        {"subtotal": "$53.80", "tax": "$6.99", "discount": "$2.00", "total": "$55.80"}
+    )
+    assert message and "55.80" in message

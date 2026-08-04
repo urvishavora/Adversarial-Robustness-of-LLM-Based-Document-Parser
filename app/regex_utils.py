@@ -264,17 +264,30 @@ def check_totals_consistency(fields: dict[str, Any]) -> str | None:
 
     tax = _money_to_float(fields.get("tax")) or 0.0
     tip = _money_to_float(fields.get("tip") or fields.get("tip/gratuity")) or 0.0
-    discount = _money_to_float(fields.get("discount")) or 0.0
+    discount = abs(_money_to_float(fields.get("discount")) or 0.0)
 
-    expected = round(subtotal + tax + tip - abs(discount), 2)
-    if abs(expected - total) <= _TOTAL_TOLERANCE:
+    # Documents differ on whether the printed subtotal is already net of a
+    # discount. On the sample receipts it is: 53.80 + 6.99 reconciles exactly
+    # to 60.79 while a discount of 2.00 is also listed, so subtracting it
+    # again double-counts. Assuming one convention flagged 6 of 10 *clean*
+    # receipts -- a check that fires on the majority of legitimate documents
+    # is worse than no check, because it trains the user to ignore it.
+    #
+    # Both readings are therefore accepted, and a discrepancy is only
+    # reported when neither reconciles. That still catches tampering: an
+    # altered total will not match either interpretation.
+    candidates = {
+        round(subtotal + tax + tip, 2),               # subtotal already net
+        round(subtotal + tax + tip - discount, 2),    # discount applied after
+    }
+    if any(abs(candidate - total) <= _TOTAL_TOLERANCE for candidate in candidates):
         return None
 
-    # A discount the parser didn't capture would also explain a total lower
-    # than the sum, so say what was compared rather than asserting fraud.
+    expected = round(subtotal + tax + tip, 2)
     return (
         f"Totals do not reconcile: subtotal {subtotal:.2f} + tax {tax:.2f}"
         + (f" + tip {tip:.2f}" if tip else "")
-        + (f" - discount {abs(discount):.2f}" if discount else "")
-        + f" = {expected:.2f}, but the extracted total is {total:.2f}."
+        + f" = {expected:.2f}"
+        + (f" (or {expected - discount:.2f} after the listed discount of {discount:.2f})" if discount else "")
+        + f", but the extracted total is {total:.2f}."
     )
